@@ -3,6 +3,8 @@
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/ListObjectsRequest.h>
 #include "aws/s3/model/PutObjectRequest.h"
+#include "aws/s3/model/GetObjectRequest.h"
+#include "aws/s3/model/DeleteObjectRequest.h"
 #include <aws/s3/model/Object.h>
 #include <cstdio>
 #include "library.h"
@@ -44,12 +46,12 @@ aws_sdk_tcl_s3_RegisterName(const char *name, Aws::S3::S3Client *internal) {
 
 static struct Aws::S3::S3Client *
 aws_sdk_tcl_s3_GetInternalFromName(const char *name) {
-    Aws::S3::S3Client *internal = NULL;
+    Aws::S3::S3Client *internal = nullptr;
     Tcl_HashEntry *entryPtr;
 
     Tcl_MutexLock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
     entryPtr = Tcl_FindHashEntry(&aws_sdk_tcl_s3_NameToInternal_HT, (char*)name);
-    if (entryPtr != NULL) {
+    if (entryPtr != nullptr) {
         internal = (Aws::S3::S3Client *)Tcl_GetHashValue(entryPtr);
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
@@ -66,11 +68,11 @@ static int aws_sdk_tcl_s3_CreateCmd(ClientData  clientData, Tcl_Interp *interp, 
     // Optional: Set to the AWS Region (overrides config file).
     // clientConfig.region = "us-east-1";
 
-//    Aws::S3::S3Client s3Client(clientConfig);
-    Aws::S3::S3Client *s3Client = new Aws::S3::S3Client(clientConfig);
+//    Aws::S3::S3Client client(clientConfig);
+    auto *client = new Aws::S3::S3Client(clientConfig);
     char handle[80];
-    CMD_NAME(handle, s3Client);
-    aws_sdk_tcl_s3_RegisterName(handle, s3Client);
+    CMD_NAME(handle, client);
+    aws_sdk_tcl_s3_RegisterName(handle, client);
     Tcl_SetObjResult(interp, Tcl_NewStringObj(handle, -1));
     return TCL_OK;
 }
@@ -83,7 +85,7 @@ static int aws_sdk_tcl_s3_ListCmd(ClientData  clientData, Tcl_Interp *interp, in
     const char *handleName = Tcl_GetString(objv[1]);
     const Aws::String bucket = Tcl_GetString(objv[2]);
 
-    Aws::S3::S3Client *s3Client = aws_sdk_tcl_s3_GetInternalFromName(handleName);
+    Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handleName);
     Aws::S3::Model::ListObjectsRequest request;
     request.WithBucket(bucket);
     if (objc == 4) {
@@ -91,7 +93,7 @@ static int aws_sdk_tcl_s3_ListCmd(ClientData  clientData, Tcl_Interp *interp, in
         request.WithPrefix(key);
     }
 
-    auto outcome = s3Client->ListObjects(request);
+    auto outcome = client->ListObjects(request);
 
     if (!outcome.IsSuccess()) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
@@ -103,7 +105,7 @@ static int aws_sdk_tcl_s3_ListCmd(ClientData  clientData, Tcl_Interp *interp, in
         Aws::Vector<Aws::S3::Model::Object> objects =
                 outcome.GetResult().GetContents();
 
-        Tcl_Obj *listObj = Tcl_NewListObj(0, NULL);
+        Tcl_Obj *listObj = Tcl_NewListObj(0, nullptr);
         for (Aws::S3::Model::Object &object: objects) {
 //            std::cout << object.GetKey() << std::endl;
             Tcl_ListObjAppendElement(interp, listObj, Tcl_NewStringObj(object.GetKey().c_str(), -1));
@@ -127,12 +129,77 @@ static int aws_sdk_tcl_s3_PutCmd(ClientData  clientData, Tcl_Interp *interp, int
             Aws::MakeShared<Aws::StringStream>("");
     *inputData << Tcl_GetString(objv[4]);
 
-    Aws::S3::S3Client *s3Client = aws_sdk_tcl_s3_GetInternalFromName(handleName);
+    Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handleName);
     Aws::S3::Model::PutObjectRequest request;
     request.SetBucket(bucket);
     request.SetKey(key);
     request.SetBody(inputData);
-    Aws::S3::Model::PutObjectOutcome outcome = s3Client->PutObject(request);
+    Aws::S3::Model::PutObjectOutcome outcome = client->PutObject(request);
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    } else {
+        return TCL_OK;
+    }
+}
+
+
+static int aws_sdk_tcl_s3_GetCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "GetCmd\n"));
+
+    CheckArgs(4,5,1,"handle_name bucket key ?chan?");
+
+    const char *handleName = Tcl_GetString(objv[1]);
+    const Aws::String bucket = Tcl_GetString(objv[2]);
+    const Aws::String key = Tcl_GetString(objv[3]);
+
+    Aws::S3::Model::GetObjectRequest request;
+    request.SetBucket(bucket);
+    request.SetKey(key);
+    Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handleName);
+
+    Aws::S3::Model::GetObjectOutcome outcome =
+            client->GetObject(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    } else {
+        Aws::IOStream &body = outcome.GetResult().GetBody();
+        std::ostringstream ss;
+        ss << body.rdbuf();
+        if (objc == 5) {
+            int mode;
+            Tcl_Channel  channel = Tcl_GetChannel(interp, Tcl_GetString(objv[4]), &mode);
+            if (!(mode & TCL_WRITABLE)) {
+                return TCL_ERROR;
+            }
+            Tcl_WriteObj(channel, Tcl_NewStringObj(ss.str().c_str(), -1));
+        } else {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj(ss.str().c_str(), -1));
+        }
+        return TCL_OK;
+    }
+}
+
+static int aws_sdk_tcl_s3_DeleteCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "DeleteCmd\n"));
+
+    CheckArgs(4,4,1,"handle_name bucket key");
+
+    const char *handleName = Tcl_GetString(objv[1]);
+    const Aws::String bucket = Tcl_GetString(objv[2]);
+    const Aws::String key = Tcl_GetString(objv[3]);
+
+    Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handleName);
+    Aws::S3::Model::DeleteObjectRequest request;
+
+    request.WithKey(key)
+            .WithBucket(bucket);
+
+    Aws::S3::Model::DeleteObjectOutcome outcome =
+            client->DeleteObject(request);
+
     if (!outcome.IsSuccess()) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
         return TCL_ERROR;
@@ -156,23 +223,25 @@ void aws_sdk_tcl_s3_InitModule() {
         Aws::SDKOptions options;
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_s3_NameToInternal_HT, TCL_STRING_KEYS);
-        Tcl_CreateThreadExitHandler(aws_sdk_tcl_s3_ExitHandler, NULL);
+        Tcl_CreateThreadExitHandler(aws_sdk_tcl_s3_ExitHandler, nullptr);
         aws_sdk_tcl_s3_ModuleInitialized = 1;
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
 }
 
 int Aws_sdk_tcl_s3_Init(Tcl_Interp *interp) {
-    if (Tcl_InitStubs(interp, "8.6", 0) == NULL) {
+    if (Tcl_InitStubs(interp, "8.6", 0) == nullptr) {
         return TCL_ERROR;
     }
 
     aws_sdk_tcl_s3_InitModule();
 
-    Tcl_CreateNamespace(interp, "::aws::s3", NULL, NULL);
-    Tcl_CreateObjCommand(interp, "::aws::s3::create", aws_sdk_tcl_s3_CreateCmd, NULL, NULL);
-    Tcl_CreateObjCommand(interp, "::aws::s3::ls", aws_sdk_tcl_s3_ListCmd, NULL, NULL);
-    Tcl_CreateObjCommand(interp, "::aws::s3::put", aws_sdk_tcl_s3_PutCmd, NULL, NULL);
+    Tcl_CreateNamespace(interp, "::aws::s3", nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::create", aws_sdk_tcl_s3_CreateCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::ls", aws_sdk_tcl_s3_ListCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::put", aws_sdk_tcl_s3_PutCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::get", aws_sdk_tcl_s3_GetCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::delete", aws_sdk_tcl_s3_DeleteCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_s3", "0.1");
 }
