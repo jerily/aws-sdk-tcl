@@ -5,6 +5,7 @@
 #include <aws/dynamodb/model/GetItemRequest.h>
 #include <aws/dynamodb/model/CreateTableRequest.h>
 #include <aws/dynamodb/model/DeleteTableRequest.h>
+#include <aws/dynamodb/model/ListTablesRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -419,6 +420,35 @@ int aws_sdk_tcl_dynamodb_DeleteTable(Tcl_Interp *interp, const char *handle, con
     }
 }
 
+int aws_sdk_tcl_dynamodb_ListTables(Tcl_Interp *interp, const char *handle) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_ListTables: handle=%s\n", handle));
+    Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::DynamoDB::Model::ListTablesRequest listTablesRequest;
+    listTablesRequest.SetLimit(50);
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, nullptr);
+    do {
+        const Aws::DynamoDB::Model::ListTablesOutcome &outcome = client->ListTables(listTablesRequest);
+        if (!outcome.IsSuccess()) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+            return TCL_ERROR;
+        }
+
+        for (const auto &tableName: outcome.GetResult().GetTableNames()) {
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj(tableName.c_str(), -1));
+        }
+        listTablesRequest.SetExclusiveStartTableName(
+                outcome.GetResult().GetLastEvaluatedTableName());
+
+    } while (!listTablesRequest.GetExclusiveStartTableName().empty());
+    Tcl_SetObjResult(interp, listPtr);
+    return TCL_OK;
+}
+
 int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -428,6 +458,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
             "delete_item",
             "create_table",
             "delete_table",
+            "list_tables",
             nullptr
     };
 
@@ -438,7 +469,8 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
         m_updateItem,
         m_deleteItem,
         m_createTable,
-        m_deleteTable
+        m_deleteTable,
+        m_listTables
     };
 
     if (objc < 2) {
@@ -489,6 +521,12 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         interp,
                         handle,
                         Tcl_GetString(objv[2])
+                );
+            case m_listTables:
+                CheckArgs(2, 2, 1, "list_tables");
+                return aws_sdk_tcl_dynamodb_ListTables(
+                        interp,
+                        handle
                 );
         }
     }
@@ -559,6 +597,12 @@ static int aws_sdk_tcl_dynamodb_DeleteTableCmd(ClientData clientData, Tcl_Interp
     return aws_sdk_tcl_dynamodb_DeleteTable(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
 }
 
+static int aws_sdk_tcl_dynamodb_ListTablesCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "ListTablesCmd\n"));
+    CheckArgs(2, 2, 1, "handle_name");
+    return aws_sdk_tcl_dynamodb_ListTables(interp, Tcl_GetString(objv[1]));
+}
+
 static void aws_sdk_tcl_dynamodb_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_dynamodb_NameToInternal_HT);
@@ -593,6 +637,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::get_item", aws_sdk_tcl_dynamodb_GetItemCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::create_table", aws_sdk_tcl_dynamodb_CreateTableCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::delete_table", aws_sdk_tcl_dynamodb_DeleteTableCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::list_tables", aws_sdk_tcl_dynamodb_ListTablesCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_dynamodb", "0.1");
 }
