@@ -19,6 +19,8 @@ cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
 ```
 
 ## Try out the examples
+Install [localstack](https://docs.localstack.cloud/getting-started/installation/) and run the following commands:
+
 ```bash
 LS_LOG=trace localstack start
 tclsh examples/s3.tcl
