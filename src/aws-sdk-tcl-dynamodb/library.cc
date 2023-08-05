@@ -321,7 +321,8 @@ int aws_sdk_tcl_dynamodb_QueryItems(
         const char *tableName,
         Tcl_Obj *dictPtr,
         Tcl_Obj *scanForwardPtr,
-        Tcl_Obj *limitPtr
+        Tcl_Obj *limitPtr,
+        Tcl_Obj *indexNamePtr
         ) {
 
     DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_QueryItems: handle=%s tableName=%s dict=%s\n", handle, tableName,
@@ -344,6 +345,10 @@ int aws_sdk_tcl_dynamodb_QueryItems(
         Tcl_GetIntFromObj(interp, limitPtr, &limit);
         request.SetLimit(limit);
     }
+    if (indexNamePtr) {
+        request.SetIndexName(Tcl_GetString(indexNamePtr));
+    }
+
     Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> attributeValues;
     Aws::String keyConditionExpression;
 
@@ -450,7 +455,14 @@ Aws::DynamoDB::Model::KeyType get_key_type(const char *type) {
     }
 }
 
-int aws_sdk_tcl_dynamodb_CreateTable(Tcl_Interp *interp, const char *handle, const char *tableName, Tcl_Obj *keySchemaDictPtr) {
+int aws_sdk_tcl_dynamodb_CreateTable(
+        Tcl_Interp *interp,
+        const char *handle,
+        const char *tableName,
+        Tcl_Obj *keySchemaDictPtr,
+        Tcl_Obj *provisionedThroughputDictPtr,
+        Tcl_Obj *globalSecondaryIndexesListPtr
+        ) {
     DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_CreateTable: handle=%s tableName=%s dict=%s\n", handle, tableName,
                 Tcl_GetString(keySchemaDictPtr)));
     Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
@@ -472,13 +484,12 @@ int aws_sdk_tcl_dynamodb_CreateTable(Tcl_Interp *interp, const char *handle, con
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
         int length;
         Tcl_ListObjLength(interp, spec, &length);
-        if (length != 2) {
+        if (length != 1 && length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid key schema definition", -1));
             return TCL_ERROR;
         }
-        Tcl_Obj *attrTypePtr, *keyTypePtr;
+        Tcl_Obj *attrTypePtr;
         Tcl_ListObjIndex(interp, spec, 0, &attrTypePtr);
-        Tcl_ListObjIndex(interp, spec, 1, &keyTypePtr);
 
         Aws::String keyName = Tcl_GetString(key);
         Aws::DynamoDB::Model::AttributeDefinition hashKey;
@@ -486,18 +497,125 @@ int aws_sdk_tcl_dynamodb_CreateTable(Tcl_Interp *interp, const char *handle, con
         hashKey.SetAttributeType(get_attribute_type(Tcl_GetString(attrTypePtr))); // Aws::DynamoDB::Model::ScalarAttributeType::S
         request.AddAttributeDefinitions(hashKey);
 
-        Aws::DynamoDB::Model::KeySchemaElement keySchemaElement;
-        keySchemaElement.WithAttributeName(keyName).WithKeyType(get_key_type(Tcl_GetString(keyTypePtr))); // Aws::DynamoDB::Model::KeyType::HASH
-        request.AddKeySchema(keySchemaElement);
+        if (length == 2) {
+            Tcl_Obj *keyTypePtr;
+            Tcl_ListObjIndex(interp, spec, 1, &keyTypePtr);
+            Aws::DynamoDB::Model::KeySchemaElement keySchemaElement;
+            keySchemaElement.WithAttributeName(keyName).WithKeyType(
+                    get_key_type(Tcl_GetString(keyTypePtr))); // Aws::DynamoDB::Model::KeyType::HASH
+            request.AddKeySchema(keySchemaElement);
+        }
     }
     Tcl_DictObjDone(&search);
 
-    request.SetBillingMode(Aws::DynamoDB::Model::BillingMode::PAY_PER_REQUEST);
+    // Provisioned or On-Demand
+    Aws::DynamoDB::Model::BillingMode billingMode = Aws::DynamoDB::Model::BillingMode::PAY_PER_REQUEST;
+    if (provisionedThroughputDictPtr) {
+        int dictSize;
+        if (TCL_ERROR == Tcl_DictObjSize(interp, provisionedThroughputDictPtr, &dictSize)) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid provisionedThroughput definition", -1));
+            return TCL_ERROR;
+        }
+        if (dictSize > 0) {
+            if (dictSize != 2) {
+                Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid provisionedThroughput definition", -1));
+                return TCL_ERROR;
+            }
+            Tcl_Obj *readCapacityUnitsPtr, *writeCapacityUnitsPtr;
+            Tcl_DictObjGet(interp, provisionedThroughputDictPtr, Tcl_NewStringObj("ReadCapacityUnits", -1), &readCapacityUnitsPtr);
+            Tcl_DictObjGet(interp, provisionedThroughputDictPtr, Tcl_NewStringObj("WriteCapacityUnits", -1), &writeCapacityUnitsPtr);
+            if (readCapacityUnitsPtr == nullptr || writeCapacityUnitsPtr == nullptr) {
+                Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid provisionedThroughput definition", -1));
+                return TCL_ERROR;
+            }
+            int readCapacityUnits = 0, writeCapacityUnits = 0;
+            Tcl_GetIntFromObj(interp, readCapacityUnitsPtr, &readCapacityUnits);
+            Tcl_GetIntFromObj(interp, writeCapacityUnitsPtr, &writeCapacityUnits);
+            Aws::DynamoDB::Model::ProvisionedThroughput throughput;
+            throughput.WithReadCapacityUnits(readCapacityUnits).WithWriteCapacityUnits(writeCapacityUnits);
+            request.SetProvisionedThroughput(throughput);
+            billingMode = Aws::DynamoDB::Model::BillingMode::PROVISIONED;
+        }
+    }
+    request.SetBillingMode(billingMode);
 
-//    Aws::DynamoDB::Model::ProvisionedThroughput throughput;
-//    throughput.WithReadCapacityUnits(5).WithWriteCapacityUnits(5);
-//    request.SetProvisionedThroughput(throughput);
-//    request.SetTableName(tableName);
+    if (globalSecondaryIndexesListPtr) {
+        int listSize;
+        if (TCL_ERROR == Tcl_ListObjLength(interp, globalSecondaryIndexesListPtr, &listSize)) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid globalSecondaryIndexes definition, must be list of dicts", -1));
+            return TCL_ERROR;
+        }
+        if (listSize > 0) {
+            std::vector<Aws::DynamoDB::Model::GlobalSecondaryIndex> globalSecondaryIndexes;
+            for (int i = 0; i < listSize; i++) {
+                Tcl_Obj *globalSecondaryIndexDictPtr;
+                Tcl_ListObjIndex(interp, globalSecondaryIndexesListPtr, i, &globalSecondaryIndexDictPtr);
+                int dictSize;
+                if (TCL_ERROR == Tcl_DictObjSize(interp, globalSecondaryIndexDictPtr, &dictSize)) {
+                    Tcl_SetObjResult(interp,
+                                     Tcl_NewStringObj("Invalid globalSecondaryIndex definition, must be dict", -1));
+                    return TCL_ERROR;
+                }
+                if (dictSize > 0) {
+                    if (dictSize != 2) {
+                        Tcl_SetObjResult(interp, Tcl_NewStringObj(
+                                "Invalid globalSecondaryIndex definition, must be dict with IndexName and KeySchema",
+                                -1));
+                        return TCL_ERROR;
+                    }
+                    Tcl_Obj *indexNamePtr, *keySchemaPtr;
+                    Tcl_DictObjGet(interp, globalSecondaryIndexDictPtr, Tcl_NewStringObj("IndexName", -1),
+                                   &indexNamePtr);
+                    Tcl_DictObjGet(interp, globalSecondaryIndexDictPtr, Tcl_NewStringObj("KeySchema", -1),
+                                   &keySchemaPtr);
+                    if (indexNamePtr == nullptr || keySchemaPtr == nullptr) {
+                        Tcl_SetObjResult(interp, Tcl_NewStringObj(
+                                "Invalid globalSecondaryIndex definition, must be dict with IndexName and KeySchema",
+                                -1));
+                        return TCL_ERROR;
+                    }
+
+                    Aws::String indexName = Tcl_GetString(indexNamePtr);
+                    Aws::DynamoDB::Model::GlobalSecondaryIndex globalSecondaryIndex;
+                    globalSecondaryIndex.SetIndexName(indexName);
+
+                    // KeySchema
+                    int keySchemaLength;
+                    Tcl_ListObjLength(interp, keySchemaPtr, &keySchemaLength);
+                    if (keySchemaLength == 0) {
+                        Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid globalSecondaryIndexes definition", -1));
+                        return TCL_ERROR;
+                    }
+
+                    std::vector<Aws::DynamoDB::Model::KeySchemaElement> keySchema;
+                    for (int j = 0; j < keySchemaLength; j++) {
+                        Tcl_Obj *keySchemaObjPtr;
+                        Tcl_ListObjIndex(interp, keySchemaPtr, j, &keySchemaObjPtr);
+                        int keySchemaObjLength;
+                        Tcl_ListObjLength(interp, keySchemaObjPtr, &keySchemaObjLength);
+                        if (keySchemaObjLength != 2) {
+                            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid globalSecondaryIndex definition, key schema element is a pair of the name of the key and its type", -1));
+                            return TCL_ERROR;
+                        }
+                        Tcl_Obj *keyNamePtr, *keyTypePtr;
+                        Tcl_ListObjIndex(interp, keySchemaObjPtr, 0, &keyNamePtr);
+                        Tcl_ListObjIndex(interp, keySchemaObjPtr, 1, &keyTypePtr);
+
+                        Aws::String keyName = Tcl_GetString(keyNamePtr);
+                        Aws::DynamoDB::Model::KeySchemaElement keySchemaElement;
+                        keySchemaElement.WithAttributeName(keyName).WithKeyType(
+                                get_key_type(Tcl_GetString(keyTypePtr))); // Aws::DynamoDB::Model::KeyType::HASH
+                        keySchema.push_back(keySchemaElement);
+                    }
+                    globalSecondaryIndex.SetKeySchema(keySchema);
+                    globalSecondaryIndex.SetProjection(Aws::DynamoDB::Model::Projection().WithProjectionType(
+                            Aws::DynamoDB::Model::ProjectionType::ALL));
+                    globalSecondaryIndexes.push_back(globalSecondaryIndex);
+                }
+                request.SetGlobalSecondaryIndexes(globalSecondaryIndexes);
+            }
+        }
+    }
 
     const Aws::DynamoDB::Model::CreateTableOutcome &outcome = client->CreateTable(request);
 
@@ -618,26 +736,29 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         objv[3]
                 );
             case m_queryItems:
-                CheckArgs(4, 6, 1, "get_item table query_dict ?scan_forward? ?limit?");
+                CheckArgs(4, 7, 1, "get_item table query_dict ?scan_forward? ?limit? ?index_name?");
                 return aws_sdk_tcl_dynamodb_QueryItems(
                         interp,
                         handle,
                         Tcl_GetString(objv[2]),
                         objv[3],
                         objc > 4 ? objv[4] : nullptr,
-                        objc > 5 ? objv[5] : nullptr
+                        objc > 5 ? objv[5] : nullptr,
+                        objc > 6 ? objv[6] : nullptr
                 );
             case m_updateItem:
                 break;
             case m_deleteItem:
                 break;
             case m_createTable:
-                CheckArgs(4, 4, 1, "create_table table key_schema_dict");
+                CheckArgs(4, 6, 1, "create_table table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?");
                 return aws_sdk_tcl_dynamodb_CreateTable(
                         interp,
                         handle,
                         Tcl_GetString(objv[2]),
-                        objv[3]
+                        objv[3],
+                        objc > 4 ? objv[4] : nullptr,
+                        objc > 5 ? objv[5] : nullptr
                 );
             case m_deleteTable:
                 CheckArgs(3, 3, 1, "delete_table table");
@@ -711,21 +832,29 @@ static int aws_sdk_tcl_dynamodb_GetItemCmd(ClientData clientData, Tcl_Interp *in
 
 static int aws_sdk_tcl_dynamodb_QueryItemsCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "QueryItemsCmd\n"));
-    CheckArgs(4, 6, 1, "handle_name table query_dict ?scan_forward? ?limit?");
+    CheckArgs(4, 7, 1, "handle_name table query_dict ?scan_forward? ?limit? ?index_name?");
     return aws_sdk_tcl_dynamodb_QueryItems(
             interp,
             Tcl_GetString(objv[1]),
             Tcl_GetString(objv[2]),
             objv[3],
             objc > 4 ? objv[4] : nullptr,
-            objc > 5 ? objv[5] : nullptr
+            objc > 5 ? objv[5] : nullptr,
+            objc > 6 ? objv[6] : nullptr
     );
 }
 
 static int aws_sdk_tcl_dynamodb_CreateTableCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "CreateTableCmd\n"));
-    CheckArgs(4, 4, 1, "handle_name table key_schema_dict");
-    return aws_sdk_tcl_dynamodb_CreateTable(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
+    CheckArgs(4, 6, 1, "create_table table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?");
+    return aws_sdk_tcl_dynamodb_CreateTable(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]),
+            objv[3],
+            objc > 4 ? objv[4] : nullptr,
+            objc > 5 ? objv[5] : nullptr
+            );
 }
 
 static int aws_sdk_tcl_dynamodb_DeleteTableCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {

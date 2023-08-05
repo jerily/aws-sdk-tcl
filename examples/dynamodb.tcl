@@ -49,4 +49,21 @@ puts query_items_2=[$client query NewTable [dict create id [list N 2]] true 2]
 puts query_items_id_and_timestamp=[$client query NewTable [dict create id [list N 1] ts [list N 1234567890]]]
 $client delete_table NewTable
 
+# global secondary indexes
+set gsi_table "MyTableWithGSI"
+$client create_table $gsi_table \
+    {id {S HASH} otherId S} \
+    {} \
+    [list [list IndexName MyTableByOtherId KeySchema [list {otherId HASH}]]]
+
+$client put_item $gsi_table [dict create id [list S "1"] otherId [list S "a"]]
+$client put_item $gsi_table [dict create id [list S "2"] otherId [list S "b"]]
+$client put_item $gsi_table [dict create id [list S "3"] otherId [list S "c"]]
+$client put_item $gsi_table [dict create id [list S "4"] otherId [list S "d"]]
+$client put_item $gsi_table [dict create id [list S "5"] otherId [list S "e"]]
+
+puts gsi_query_items_id_2=[$client query $gsi_table [dict create id [list S "2"]]]
+puts gsi_query_items_otherid_c=[$client query $gsi_table [dict create otherId [list S "c"]] true 1 MyTableByOtherId]
+$client delete_table $gsi_table
+
 $client destroy
