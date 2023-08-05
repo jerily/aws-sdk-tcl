@@ -28,4 +28,7 @@ $client put_item $table $item_dict
 set key_dict [dict create id [list N "1"]]
 set items [$client get_item $table $key_dict]
 puts items=$items
+
+$client delete_table $table
+
 $client destroy

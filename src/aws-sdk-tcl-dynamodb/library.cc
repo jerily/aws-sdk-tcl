@@ -4,6 +4,7 @@
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
 #include <aws/dynamodb/model/CreateTableRequest.h>
+#include <aws/dynamodb/model/DeleteTableRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -396,6 +397,28 @@ int aws_sdk_tcl_dynamodb_CreateTable(Tcl_Interp *interp, const char *handle, con
     }
 }
 
+int aws_sdk_tcl_dynamodb_DeleteTable(Tcl_Interp *interp, const char *handle, const char *tableName) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_DeleteTable: handle=%s tableName=%s\n", handle, tableName));
+    Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::DynamoDB::Model::DeleteTableRequest request;
+    request.SetTableName(tableName);
+
+    auto outcome = client->DeleteTable(request);
+
+    if (outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewBooleanObj(true));
+        return TCL_OK;
+    } else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
 int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -404,6 +427,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
             "update_item",
             "delete_item",
             "create_table",
+            "delete_table",
             nullptr
     };
 
@@ -413,7 +437,8 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
         m_getItem,
         m_updateItem,
         m_deleteItem,
-        m_createTable
+        m_createTable,
+        m_deleteTable
     };
 
     if (objc < 2) {
@@ -457,6 +482,13 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         handle,
                         Tcl_GetString(objv[2]),
                         objv[3]
+                );
+            case m_deleteTable:
+                CheckArgs(3, 3, 1, "delete_table table");
+                return aws_sdk_tcl_dynamodb_DeleteTable(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2])
                 );
         }
     }
@@ -521,6 +553,12 @@ static int aws_sdk_tcl_dynamodb_CreateTableCmd(ClientData clientData, Tcl_Interp
     return aws_sdk_tcl_dynamodb_CreateTable(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
 }
 
+static int aws_sdk_tcl_dynamodb_DeleteTableCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "DeleteTableCmd\n"));
+    CheckArgs(3, 3, 1, "handle_name table");
+    return aws_sdk_tcl_dynamodb_DeleteTable(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
+}
+
 static void aws_sdk_tcl_dynamodb_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_dynamodb_NameToInternal_HT);
@@ -554,6 +592,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::put_item", aws_sdk_tcl_dynamodb_PutItemCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::get_item", aws_sdk_tcl_dynamodb_GetItemCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::create_table", aws_sdk_tcl_dynamodb_CreateTableCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::delete_table", aws_sdk_tcl_dynamodb_DeleteTableCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_dynamodb", "0.1");
 }
