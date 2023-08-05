@@ -1,21 +1,20 @@
 # aws-sdk-tcl
 
+## Clone the repository
+```bash
+git clone --depth 1 --recurse-submodules https://github.com/jerily/aws-sdk-tcl.git
+cd aws-sdk-tcl
+TCL_AWS_DIR=$(pwd)
+```
+
 ## Build Dependencies
 ```bash
-git clone --depth 1 https://github.com/aws/aws-sdk-cpp.git
-cd aws-sdk-cpp
+cd ${TCL_AWS_DIR}/aws-sdk-cpp
 mkdir build
 cd build
 cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;lambda;sqs;transfer;sts"
 cmake --build . --config=Release
 cmake --install . --config=Release
-```
-
-## Clone the repository
-```bash
-git clone https://github.com/jerily/aws-sdk-tcl.git
-cd aws-sdk-tcl
-TCL_AWS_DIR=$(pwd)
 ```
 
 ## Build
