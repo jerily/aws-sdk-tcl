@@ -216,7 +216,7 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
     }
 }
 
-Tcl_Obj* get_dict_obj_from_attribute_value(Aws::DynamoDB::Model::AttributeValue attribute_value);
+Tcl_Obj* get_dict_obj_from_attribute_value(const Aws::DynamoDB::Model::AttributeValue& attribute_value);
 
 Tcl_Obj* get_dict_obj_from_map(std::map<std::string, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> map_attr_value) {
     Tcl_Obj *dictPtr = Tcl_NewDictObj();
@@ -237,7 +237,7 @@ Tcl_Obj* get_dict_obj_from_list(std::vector<std::shared_ptr<Aws::DynamoDB::Model
     return listPtr;
 }
 
-Tcl_Obj* get_dict_obj_from_attribute_value(Aws::DynamoDB::Model::AttributeValue attribute_value) {
+Tcl_Obj* get_dict_obj_from_attribute_value(const Aws::DynamoDB::Model::AttributeValue& attribute_value) {
     switch (attribute_value.GetType()) {
         case Aws::DynamoDB::Model::ValueType::NUMBER:
             return Tcl_NewStringObj(attribute_value.GetN().c_str(), -1);
