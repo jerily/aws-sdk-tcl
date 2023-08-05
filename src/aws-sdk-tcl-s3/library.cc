@@ -66,7 +66,6 @@ static int
 aws_sdk_tcl_s3_UnregisterName(const char *name) {
 
     Tcl_HashEntry *entryPtr;
-    int newEntry;
 
     Tcl_MutexLock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
     entryPtr = Tcl_FindHashEntry(&aws_sdk_tcl_s3_NameToInternal_HT, (char*)name);
@@ -474,7 +473,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
     Tcl_ResetResult(interp);
 
     int methodIndex;
-    if (TCL_OK == Tcl_GetIndexFromObj(interp, objv[1], clientMethods, "method", 0, &methodIndex) != TCL_OK) {
+    if (TCL_OK == Tcl_GetIndexFromObj(interp, objv[1], clientMethods, "method", 0, &methodIndex)) {
         Tcl_ResetResult(interp);
         const char *handle = Tcl_GetString(objv[0]);
         switch ((enum clientMethod) methodIndex ) {
