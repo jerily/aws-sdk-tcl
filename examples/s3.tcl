@@ -50,6 +50,12 @@ puts lst_after_delete=$lst
 ::aws::s3::get $s3_client $bucket_name "my_logo.png" mylogo.png
 ::aws::s3::delete $s3_client $bucket_name "my_logo.png"
 
+$s3_client put_text $bucket_name "test1.txt" "Hello World 1"
+$s3_client put_text $bucket_name "test2.txt" "Hello World 2"
+puts before_batch_delete=[$s3_client ls $bucket_name]
+$s3_client batch_delete $bucket_name [list "test1.txt" "test2.txt"]
+puts after_batch_delete=[$s3_client ls $bucket_name]
+
 $s3_client delete_bucket $bucket_name
 
 #::aws::s3::destroy $s3_client
