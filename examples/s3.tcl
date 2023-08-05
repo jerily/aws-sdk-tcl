@@ -7,10 +7,14 @@ set config_dict [dict create endpoint "http://s3.localhost.localstack.cloud:4566
 #set config_dict [dict create]
 set s3_client [::aws::s3::create $config_dict]
 
+puts exists_bucket_before=[$s3_client exists_bucket $bucket_name]
+$s3_client create_bucket $bucket_name
+puts exists_bucket_after=[$s3_client exists_bucket $bucket_name]
+
+puts exists_object_before=[$s3_client exists $bucket_name "test.txt"]
 #::aws::s3::put_text $s3_client $bucket_name "test.txt" "Hello World"
 $s3_client put_text $bucket_name "test.txt" "Hello World"
-
-puts exists_p=[$s3_client exists $bucket_name "test.txt"]
+puts exists_object_after=[$s3_client exists $bucket_name "test.txt"]
 
 #set lst [::aws::s3::ls $s3_client $bucket_name]
 #puts lst=$lst
@@ -45,6 +49,8 @@ puts lst_after_delete=$lst
 #close $to_chan
 ::aws::s3::get $s3_client $bucket_name "my_logo.png" mylogo.png
 ::aws::s3::delete $s3_client $bucket_name "my_logo.png"
+
+$s3_client delete_bucket $bucket_name
 
 #::aws::s3::destroy $s3_client
 $s3_client destroy
