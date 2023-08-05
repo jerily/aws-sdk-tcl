@@ -10,6 +10,7 @@ TCL_AWS_DIR=$(pwd)
 ## Build Dependencies
 ```bash
 cd ${TCL_AWS_DIR}/aws-sdk-cpp
+git submodule update --init
 mkdir build
 cd build
 cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;lambda;sqs;transfer;sts"
