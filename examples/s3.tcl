@@ -5,8 +5,9 @@ set bucket_name "my-bucket"
 
 set config_dict [dict create profile localstack region us-east-1 endpoint "http://localhost:4566"]
 set s3_client [::aws::s3::create $config_dict]
-::aws::s3::put_text $s3_client $bucket_name "test.txt" "Hello World"
-#$s3_client put_text $bucket_name "test.txt" "Hello World"
+
+#::aws::s3::put_text $s3_client $bucket_name "test.txt" "Hello World"
+$s3_client put_text $bucket_name "test.txt" "Hello World"
 
 #set lst [::aws::s3::ls $s3_client $bucket_name]
 #puts lst=$lst
@@ -26,7 +27,6 @@ puts text=$text
 #close $chan
 $s3_client get $bucket_name "test.txt" myfile.txt
 puts files=[glob myfile.*]
-
 
 ::aws::s3::delete $s3_client $bucket_name "test.txt"
 
