@@ -2,7 +2,7 @@
 
 ## Clone the repository
 ```bash
-git clone --recurse-submodules https://github.com/jerily/aws-sdk-tcl.git
+git clone https://github.com/jerily/aws-sdk-tcl.git
 cd aws-sdk-tcl
 TCL_AWS_DIR=$(pwd)
 ```
