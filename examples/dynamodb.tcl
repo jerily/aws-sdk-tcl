@@ -1,6 +1,8 @@
 set dir [file dirname [dict get [info frame 0] file]]
 load [file join $dir .. build src/aws-sdk-tcl-dynamodb libaws-sdk-tcl-dynamodb.so] Aws_sdk_tcl_dynamodb
 
+set table "my-table"
+
 set client [::aws::dynamodb::create [dict create]]
 set item_dict [dict create \
     id [list N 1] \
@@ -16,6 +18,9 @@ set item_dict [dict create \
 ]
 puts $item_dict
 
-set table "my-table"
 $client put_item $table $item_dict
+
+set key_dict [dict create id [list N "1"]]
+set items [$client get_item $table $key_dict]
+puts items=$items
 $client destroy

@@ -2,6 +2,7 @@
 #include <aws/core/Aws.h>
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
+#include <aws/dynamodb/model/GetItemRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -187,14 +188,14 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
         Aws::String attribute_key = Tcl_GetString(key);
-        fprintf(stderr, "key=%s spec=%s\n", attribute_key.c_str(), Tcl_GetString(spec));
+        DBG(fprintf(stderr, "key=%s spec=%s\n", attribute_key.c_str(), Tcl_GetString(spec)));
         auto value = set_attribute_value(interp, spec);
-        fprintf(stderr, "done\n");
+        DBG(fprintf(stderr, "done\n"));
         putItemRequest.AddItem(attribute_key, *value);
     }
     Tcl_DictObjDone(&search);
 
-    fprintf(stderr, "putItemRequest ready\n");
+    DBG(fprintf(stderr, "putItemRequest ready\n"));
 
     const Aws::DynamoDB::Model::PutItemOutcome outcome = client->PutItem(
             putItemRequest);
@@ -204,6 +205,58 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
         return TCL_OK;
     } else {
 //        std::cerr << outcome.GetError().GetMessage() << std::endl;
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
+int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const char *tableName, Tcl_Obj *dictPtr) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_GetItem: handle=%s tableName=%s dict=%s\n", handle, tableName,
+                Tcl_GetString(dictPtr)));
+    Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::DynamoDB::Model::GetItemRequest getItemRequest;
+    getItemRequest.SetTableName(tableName);
+
+    Tcl_DictSearch search;
+    Tcl_Obj *key, *spec;
+    int done;
+    if (Tcl_DictObjFirst(interp, dictPtr, &search,
+                         &key, &spec, &done) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        Aws::String attribute_key = Tcl_GetString(key);
+        DBG(fprintf(stderr, "key=%s spec=%s\n", attribute_key.c_str(), Tcl_GetString(spec)));
+        auto value = set_attribute_value(interp, spec);
+        DBG(fprintf(stderr, "done\n"));
+        getItemRequest.AddKey(attribute_key, *value);
+    }
+    Tcl_DictObjDone(&search);
+
+    DBG(fprintf(stderr, "getItemRequest ready\n"));
+
+    const Aws::DynamoDB::Model::GetItemOutcome outcome = client->GetItem(
+            getItemRequest);
+    if (outcome.IsSuccess()) {
+        Tcl_Obj *result = Tcl_NewDictObj();
+        // Reference the retrieved fields/values.
+        const Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> &item = outcome.GetResult().GetItem();
+        if (!item.empty()) {
+            // Output each retrieved field and its value.
+            for (const auto &i: item) {
+//                std::cout << "Values: " << i.first << ": " << i.second.GetS() << std::endl;
+                Tcl_DictObjPut(interp, result, Tcl_NewStringObj(i.first.c_str(), -1),
+                               Tcl_NewStringObj(i.second.GetS().c_str(), -1));
+            }
+        }
+        Tcl_SetObjResult(interp, result);
+        return TCL_OK;
+    } else {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
         return TCL_ERROR;
     }
@@ -242,7 +295,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
             case m_destroy:
                 return aws_sdk_tcl_dynamodb_Destroy(interp, handle);
             case m_putItem:
-                CheckArgs(4, 4, 1, "handle_name table item_dict");
+                CheckArgs(4, 4, 1, "put_item table item_dict");
                 return aws_sdk_tcl_dynamodb_PutItem(
                         interp,
                         handle,
@@ -250,7 +303,13 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         objv[3]
                 );
             case m_getItem:
-                break;
+                CheckArgs(4, 4, 1, "get_item table key_dict");
+                return aws_sdk_tcl_dynamodb_GetItem(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        objv[3]
+                );
             case m_updateItem:
                 break;
             case m_deleteItem:
@@ -293,11 +352,16 @@ static int aws_sdk_tcl_dynamodb_DestroyCmd(ClientData clientData, Tcl_Interp *in
     return aws_sdk_tcl_dynamodb_Destroy(interp, Tcl_GetString(objv[1]));
 }
 
-
 static int aws_sdk_tcl_dynamodb_PutItemCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
-    DBG(fprintf(stderr, "PutChannelCmd\n"));
+    DBG(fprintf(stderr, "PutItemCmd\n"));
     CheckArgs(4, 4, 1, "handle_name table item_dict");
     return aws_sdk_tcl_dynamodb_PutItem(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
+}
+
+static int aws_sdk_tcl_dynamodb_GetItemCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "GetItemCmd\n"));
+    CheckArgs(4, 4, 1, "handle_name table key_dict");
+    return aws_sdk_tcl_dynamodb_GetItem(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
 }
 
 static void aws_sdk_tcl_dynamodb_ExitHandler(ClientData unused) {
@@ -330,7 +394,8 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateNamespace(interp, "::aws::dynamodb", nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::create", aws_sdk_tcl_dynamodb_CreateCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::destroy", aws_sdk_tcl_dynamodb_DestroyCmd, nullptr, nullptr);
-    Tcl_CreateObjCommand(interp, "::aws::dynamodb::putItem", aws_sdk_tcl_dynamodb_PutItemCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::put_item", aws_sdk_tcl_dynamodb_PutItemCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::get_item", aws_sdk_tcl_dynamodb_GetItemCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_dynamodb", "0.1");
 }
