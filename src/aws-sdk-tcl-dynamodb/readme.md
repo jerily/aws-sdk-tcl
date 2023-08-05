@@ -1,7 +1,17 @@
-awslocal dynamodb create-table \
---table-name MyTable \
---attribute-definitions \
-AttributeName=id,AttributeType=N \
---key-schema \
-AttributeName=id,KeyType=HASH \
---billing-mode PAY_PER_REQUEST
+# TCL DynamoDB Commands
+* **::aws::dynamodb::create** *config_dict*
+    - returns a handle to a DynamoDB client
+* **::aws::dynamodb::put_item** *handle table item_dict*
+    - puts an item into a table
+* **::aws::dynamodb::get_item** *handle table key_dict*
+    - gets an item from a table
+* **::aws::dynamodb::query_items** *handle table query_dict ?scan_forward? ?limit? ?index_name?*
+    - queries items from a table
+* **::aws::dynamodb::create_table** *handle table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?*
+    - creates a table
+* **::aws::dynamodb::delete_table** *handle table*
+    - deletes a table
+* **::aws::dynamodb::list_tables** *handle*
+    - returns a list of tables
+* **::aws::dynamodb::destroy** *handle*
+    - destroys a DynamoDB client

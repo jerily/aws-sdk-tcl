@@ -846,7 +846,7 @@ static int aws_sdk_tcl_dynamodb_QueryItemsCmd(ClientData clientData, Tcl_Interp 
 
 static int aws_sdk_tcl_dynamodb_CreateTableCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "CreateTableCmd\n"));
-    CheckArgs(4, 6, 1, "create_table table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?");
+    CheckArgs(4, 6, 1, "handle_name table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?");
     return aws_sdk_tcl_dynamodb_CreateTable(
             interp,
             Tcl_GetString(objv[1]),
