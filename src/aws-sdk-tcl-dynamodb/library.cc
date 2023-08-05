@@ -3,6 +3,7 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
+#include <aws/dynamodb/model/QueryRequest.h>
 #include <aws/dynamodb/model/CreateTableRequest.h>
 #include <aws/dynamodb/model/DeleteTableRequest.h>
 #include <aws/dynamodb/model/ListTablesRequest.h>
@@ -314,6 +315,117 @@ int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const c
     }
 }
 
+int aws_sdk_tcl_dynamodb_QueryItems(
+        Tcl_Interp *interp,
+        const char *handle,
+        const char *tableName,
+        Tcl_Obj *dictPtr,
+        Tcl_Obj *scanForwardPtr,
+        Tcl_Obj *limitPtr
+        ) {
+
+    DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_QueryItems: handle=%s tableName=%s dict=%s\n", handle, tableName,
+                Tcl_GetString(dictPtr)));
+    Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::DynamoDB::Model::QueryRequest request;
+    request.SetTableName(tableName);
+    if (scanForwardPtr) {
+        int scanForward;
+        Tcl_GetBooleanFromObj(interp, scanForwardPtr, &scanForward);
+        request.SetScanIndexForward(scanForward);
+    }
+    int limit = 0;
+    if (limitPtr) {
+        Tcl_GetIntFromObj(interp, limitPtr, &limit);
+        request.SetLimit(limit);
+    }
+    Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> attributeValues;
+    Aws::String keyConditionExpression;
+
+    Tcl_DictSearch search;
+    Tcl_Obj *key, *spec;
+    int done;
+    if (Tcl_DictObjFirst(interp, dictPtr, &search,
+                         &key, &spec, &done) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        int length;
+        Tcl_ListObjLength(interp, spec, &length);
+        if (length != 2) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
+            return TCL_ERROR;
+        }
+        Aws::String attribute_key = Tcl_GetString(key);
+        DBG(fprintf(stderr, "key=%s spec=%s\n", attribute_key.c_str(), Tcl_GetString(spec)));
+        auto value = set_attribute_value(interp, spec);
+        attributeValues.emplace(":" + attribute_key, *value);
+
+        if (keyConditionExpression.length() > 0) {
+            keyConditionExpression.append(" AND ");
+        }
+        keyConditionExpression.append(attribute_key);
+        keyConditionExpression.append(" = :");
+        keyConditionExpression.append(attribute_key);
+    }
+    Tcl_DictObjDone(&search);
+
+    request.SetKeyConditionExpression(keyConditionExpression);
+    request.SetExpressionAttributeValues(attributeValues);
+
+    Tcl_Obj *resultListPtr = Tcl_NewListObj(0, nullptr);
+    int count = 0;
+
+    // "exclusiveStartKey" is used for pagination.
+    Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue> exclusiveStartKey;
+    do {
+        if (!exclusiveStartKey.empty()) {
+            request.SetExclusiveStartKey(exclusiveStartKey);
+            exclusiveStartKey.clear();
+        }
+        // Perform Query operation.
+        const Aws::DynamoDB::Model::QueryOutcome &outcome = client->Query(request);
+        if (outcome.IsSuccess()) {
+            // Reference the retrieved items.
+            const Aws::Vector<Aws::Map<Aws::String, Aws::DynamoDB::Model::AttributeValue>> &items = outcome.GetResult().GetItems();
+            if (!items.empty()) {
+//                std::cout << "Number of items retrieved from Query: " << items.size() << std::endl;
+                for (const auto &item: items) {
+//                    std::cout << "******************************************************" << std::endl;
+                    // Output each retrieved field and its value.
+                    Tcl_Obj *itemDictPtr = Tcl_NewDictObj();
+                    for (const auto &i: item) {
+//                        std::cout << i.first << ": " << i.second.GetS() << std::endl;
+                        Tcl_DictObjPut(interp, itemDictPtr, Tcl_NewStringObj(i.first.c_str(), -1),
+                                       get_dict_obj_from_attribute_value(i.second));
+                        count++;
+                    }
+                    Tcl_ListObjAppendElement(interp, resultListPtr, itemDictPtr);
+                }
+            }
+//            else {
+//                std::cout << "No item found in table: " << tableName << std::endl;
+//            }
+
+            // If LastEvaluatedKey presents in the output, it means there are more items
+            exclusiveStartKey = outcome.GetResult().GetLastEvaluatedKey();
+        }
+        else {
+//            std::cerr << "Failed to Query items: " << outcome.GetError().GetMessage();
+            Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+            return TCL_ERROR;
+        }
+    } while (!exclusiveStartKey.empty() && (limitPtr == nullptr || count < limit));
+
+    Tcl_SetObjResult(interp, resultListPtr);
+    return TCL_OK;
+}
+
 Aws::DynamoDB::Model::ScalarAttributeType get_attribute_type(const char *type) {
     switch(type[0]) {
         case 'S':
@@ -454,6 +566,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
             "destroy",
             "put_item",
             "get_item",
+            "query_items",
             "update_item",
             "delete_item",
             "create_table",
@@ -466,6 +579,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
         m_destroy,
         m_putItem,
         m_getItem,
+        m_queryItems,
         m_updateItem,
         m_deleteItem,
         m_createTable,
@@ -502,6 +616,16 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         handle,
                         Tcl_GetString(objv[2]),
                         objv[3]
+                );
+            case m_queryItems:
+                CheckArgs(4, 6, 1, "get_item table query_dict ?scan_forward? ?limit?");
+                return aws_sdk_tcl_dynamodb_QueryItems(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        objv[3],
+                        objc > 4 ? objv[4] : nullptr,
+                        objc > 5 ? objv[5] : nullptr
                 );
             case m_updateItem:
                 break;
@@ -585,6 +709,19 @@ static int aws_sdk_tcl_dynamodb_GetItemCmd(ClientData clientData, Tcl_Interp *in
     return aws_sdk_tcl_dynamodb_GetItem(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
 }
 
+static int aws_sdk_tcl_dynamodb_QueryItemsCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "QueryItemsCmd\n"));
+    CheckArgs(4, 6, 1, "handle_name table query_dict ?scan_forward? ?limit?");
+    return aws_sdk_tcl_dynamodb_QueryItems(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]),
+            objv[3],
+            objc > 4 ? objv[4] : nullptr,
+            objc > 5 ? objv[5] : nullptr
+    );
+}
+
 static int aws_sdk_tcl_dynamodb_CreateTableCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "CreateTableCmd\n"));
     CheckArgs(4, 4, 1, "handle_name table key_schema_dict");
@@ -635,6 +772,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::destroy", aws_sdk_tcl_dynamodb_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::put_item", aws_sdk_tcl_dynamodb_PutItemCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::get_item", aws_sdk_tcl_dynamodb_GetItemCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::query_items", aws_sdk_tcl_dynamodb_QueryItemsCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::create_table", aws_sdk_tcl_dynamodb_CreateTableCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::delete_table", aws_sdk_tcl_dynamodb_DeleteTableCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::list_tables", aws_sdk_tcl_dynamodb_ListTablesCmd, nullptr, nullptr);
