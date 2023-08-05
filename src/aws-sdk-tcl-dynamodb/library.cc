@@ -187,6 +187,12 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        int length;
+        Tcl_ListObjLength(interp, spec, &length);
+        if (length != 2) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
+            return TCL_ERROR;
+        }
         Aws::String attribute_key = Tcl_GetString(key);
         DBG(fprintf(stderr, "key=%s spec=%s\n", attribute_key.c_str(), Tcl_GetString(spec)));
         auto value = set_attribute_value(interp, spec);
@@ -230,6 +236,12 @@ int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const c
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        int length;
+        Tcl_ListObjLength(interp, spec, &length);
+        if (length != 2) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
+            return TCL_ERROR;
+        }
         Aws::String attribute_key = Tcl_GetString(key);
         DBG(fprintf(stderr, "key=%s spec=%s\n", attribute_key.c_str(), Tcl_GetString(spec)));
         auto value = set_attribute_value(interp, spec);
