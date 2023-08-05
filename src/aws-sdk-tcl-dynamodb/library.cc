@@ -29,13 +29,8 @@ static Tcl_HashTable aws_sdk_tcl_dynamodb_NameToInternal_HT;
 static Tcl_Mutex aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex;
 static int aws_sdk_tcl_dynamodb_ModuleInitialized;
 
-static char s3_client_usage[] =
-        "Usage s3Client <method> <args>, where method can be:\n"
-        "   ls bucket ?key?                 \n"
-        "   put_text bucket key text        \n"
-        "   put bucket key input_file       \n"
-        "   get bucket key ?output_file?    \n"
-        "   delete bucket key               \n";
+static char dynamodb_client_usage[] =
+        "Usage dynamodbClient <method> <args>, where method can be:\n";
 
 
 static int
@@ -707,7 +702,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
 
     if (objc < 2) {
         Tcl_ResetResult(interp);
-        Tcl_SetStringObj(Tcl_GetObjResult(interp), (s3_client_usage), -1);
+        Tcl_SetStringObj(Tcl_GetObjResult(interp), (dynamodb_client_usage), -1);
         return TCL_ERROR;
     }
     Tcl_ResetResult(interp);
