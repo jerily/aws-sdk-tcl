@@ -379,10 +379,22 @@ static int aws_sdk_tcl_s3_CreateCmd(ClientData  clientData, Tcl_Interp *interp, 
     CheckArgs(2,2,1,"config_dict");
 
     Aws::Client::ClientConfiguration clientConfig;
-    // Optional: Set to the AWS Region (overrides config file).
-    // clientConfig.region = "us-east-1";
+    Tcl_Obj *profile;
+    Tcl_Obj *region;
+    Tcl_Obj *endpoint;
+    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("profile", -1), &profile);
+    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("region", -1), &region);
+    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("endpoint", -1), &endpoint);
+    if (profile) {
+        clientConfig.profileName = Tcl_GetString(profile);
+    }
+    if (region) {
+        clientConfig.region = Tcl_GetString(region);
+    }
+    if (endpoint) {
+        clientConfig.endpointOverride = Tcl_GetString(endpoint);
+    }
 
-//    Aws::S3::S3Client client(clientConfig);
     auto *client = new Aws::S3::S3Client(clientConfig);
     char handle[80];
     CMD_NAME(handle, client);

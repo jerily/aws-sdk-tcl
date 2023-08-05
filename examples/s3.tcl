@@ -3,8 +3,8 @@ load [file join $dir .. build src/aws-sdk-tcl-s3 libaws-sdk-tcl-s3.so] Aws_sdk_t
 
 set bucket_name "my-bucket"
 
-set config_dict [dict create]
-set s3_client [::aws::s3::create config_dict]
+set config_dict [dict create profile localstack region us-east-1 endpoint "http://localhost:4566"]
+set s3_client [::aws::s3::create $config_dict]
 ::aws::s3::put_text $s3_client $bucket_name "test.txt" "Hello World"
 #$s3_client put_text $bucket_name "test.txt" "Hello World"
 

@@ -216,6 +216,44 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
     }
 }
 
+Tcl_Obj* get_dict_obj_from_attribute_value(Aws::DynamoDB::Model::AttributeValue attribute_value);
+
+Tcl_Obj* get_dict_obj_from_map(std::map<std::string, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> map_attr_value) {
+    Tcl_Obj *dictPtr = Tcl_NewDictObj();
+    for (auto const& x : map_attr_value) {
+        Tcl_Obj *keyPtr = Tcl_NewStringObj(x.first.c_str(), -1);
+        Tcl_Obj *valuePtr = get_dict_obj_from_attribute_value(*x.second);
+        Tcl_DictObjPut(NULL, dictPtr, keyPtr, valuePtr);
+    }
+    return dictPtr;
+}
+
+Tcl_Obj* get_dict_obj_from_list(std::vector<std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> list_attr_value) {
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+    for (auto const& x : list_attr_value) {
+        Tcl_Obj *valuePtr = get_dict_obj_from_attribute_value(*x);
+        Tcl_ListObjAppendElement(NULL, listPtr, valuePtr);
+    }
+    return listPtr;
+}
+
+Tcl_Obj* get_dict_obj_from_attribute_value(Aws::DynamoDB::Model::AttributeValue attribute_value) {
+    switch (attribute_value.GetType()) {
+        case Aws::DynamoDB::Model::ValueType::NUMBER:
+            return Tcl_NewStringObj(attribute_value.GetN().c_str(), -1);
+        case Aws::DynamoDB::Model::ValueType::STRING:
+            return Tcl_NewStringObj(attribute_value.GetS().c_str(), -1);
+        case Aws::DynamoDB::Model::ValueType::BOOL:
+            return Tcl_NewBooleanObj(attribute_value.GetBool());
+        case Aws::DynamoDB::Model::ValueType::ATTRIBUTE_MAP:
+            return get_dict_obj_from_map(attribute_value.GetM());
+        case Aws::DynamoDB::Model::ValueType::ATTRIBUTE_LIST:
+            return get_dict_obj_from_list(attribute_value.GetL());
+        default:
+            return Tcl_NewStringObj("__unknown__", -1);
+    }
+}
+
 int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const char *tableName, Tcl_Obj *dictPtr) {
     DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_GetItem: handle=%s tableName=%s dict=%s\n", handle, tableName,
                 Tcl_GetString(dictPtr)));
@@ -261,9 +299,9 @@ int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const c
         if (!item.empty()) {
             // Output each retrieved field and its value.
             for (const auto &i: item) {
-//                std::cout << "Values: " << i.first << ": " << i.second.GetS() << std::endl;
+//                std::cout << "Values: " << i.first << ": " << i.second.GetS()<< std::endl;
                 Tcl_DictObjPut(interp, result, Tcl_NewStringObj(i.first.c_str(), -1),
-                               Tcl_NewStringObj(i.second.GetS().c_str(), -1));
+                               get_dict_obj_from_attribute_value(i.second));
             }
         }
         Tcl_SetObjResult(interp, result);
@@ -339,10 +377,22 @@ static int aws_sdk_tcl_dynamodb_CreateCmd(ClientData clientData, Tcl_Interp *int
     CheckArgs(2, 2, 1, "config_dict");
 
     Aws::Client::ClientConfiguration clientConfig;
-    // Optional: Set to the AWS Region (overrides config file).
-    // clientConfig.region = "us-east-1";
+    Tcl_Obj *profile;
+    Tcl_Obj *region;
+    Tcl_Obj *endpoint;
+    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("profile", -1), &profile);
+    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("region", -1), &region);
+    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("endpoint", -1), &endpoint);
+    if (profile) {
+        clientConfig.profileName = Tcl_GetString(profile);
+    }
+    if (region) {
+        clientConfig.region = Tcl_GetString(region);
+    }
+    if (endpoint) {
+        clientConfig.endpointOverride = Tcl_GetString(endpoint);
+    }
 
-//    Aws::DynamoDB::DynamoDBClient client(clientConfig);
     auto *client = new Aws::DynamoDB::DynamoDBClient(clientConfig);
     char handle[80];
     CMD_NAME(handle, client);
