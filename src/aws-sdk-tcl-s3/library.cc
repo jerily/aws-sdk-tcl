@@ -477,7 +477,7 @@ int Aws_sdk_tcl_s3_Init(Tcl_Interp *interp) {
 
 #ifdef USE_NAVISERVER
 int Ns_ModuleInit(const char *server, const char *module) {
-    Ns_TclRegisterTrace(server, (Ns_TclTraceProc *) Tbert_Init, server, NS_TCL_TRACE_CREATE);
+    Ns_TclRegisterTrace(server, (Ns_TclTraceProc *) Aws_sdk_tcl_s3_Init, server, NS_TCL_TRACE_CREATE);
     return NS_OK;
 }
 #endif
