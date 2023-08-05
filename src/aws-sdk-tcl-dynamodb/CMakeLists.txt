@@ -13,7 +13,7 @@ find_package(Threads REQUIRED)
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 #set(CMAKE_CXX_FLAGS "-DDEBUG ${CMAKE_CXX_FLAGS}")
 
-add_library(${PROJECT_NAME} SHARED library.cc)
+add_library(${PROJECT_NAME} SHARED MODULE library.cc)
 set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if (NAVISERVER)
