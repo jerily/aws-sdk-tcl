@@ -5,6 +5,9 @@ set table "MyTable"
 
 set config_dict [dict create profile localstack region us-east-1 endpoint "http://localhost:4566"]
 set client [::aws::dynamodb::create $config_dict]
+
+$client create_table $table [dict create id [list N HASH]]
+
 set item_dict [dict create \
     id [list N 1] \
     name [list S "test"] \

@@ -3,6 +3,7 @@
 #include <aws/dynamodb/DynamoDBClient.h>
 #include <aws/dynamodb/model/PutItemRequest.h>
 #include <aws/dynamodb/model/GetItemRequest.h>
+#include <aws/dynamodb/model/CreateTableRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -311,6 +312,90 @@ int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const c
     }
 }
 
+Aws::DynamoDB::Model::ScalarAttributeType get_attribute_type(const char *type) {
+    switch(type[0]) {
+        case 'S':
+            return Aws::DynamoDB::Model::ScalarAttributeType::S;
+        case 'N':
+            return Aws::DynamoDB::Model::ScalarAttributeType::N;
+        case 'B':
+            return Aws::DynamoDB::Model::ScalarAttributeType::B;
+        default:
+            return Aws::DynamoDB::Model::ScalarAttributeType::S;
+    }
+}
+
+Aws::DynamoDB::Model::KeyType get_key_type(const char *type) {
+    switch(type[0]) {
+        case 'H':
+            return Aws::DynamoDB::Model::KeyType::HASH;
+        case 'R':
+            return Aws::DynamoDB::Model::KeyType::RANGE;
+        default:
+            return Aws::DynamoDB::Model::KeyType::HASH;
+    }
+}
+
+int aws_sdk_tcl_dynamodb_CreateTable(Tcl_Interp *interp, const char *handle, const char *tableName, Tcl_Obj *keySchemaDictPtr) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_CreateTable: handle=%s tableName=%s dict=%s\n", handle, tableName,
+                Tcl_GetString(keySchemaDictPtr)));
+    Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::DynamoDB::Model::CreateTableRequest request;
+    request.SetTableName(tableName);
+
+    Tcl_DictSearch search;
+    Tcl_Obj *key, *spec;
+    int done;
+    if (Tcl_DictObjFirst(interp, keySchemaDictPtr, &search,
+                         &key, &spec, &done) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        int length;
+        Tcl_ListObjLength(interp, spec, &length);
+        if (length != 2) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid key schema definition", -1));
+            return TCL_ERROR;
+        }
+        Tcl_Obj *attrTypePtr, *keyTypePtr;
+        Tcl_ListObjIndex(interp, spec, 0, &attrTypePtr);
+        Tcl_ListObjIndex(interp, spec, 1, &keyTypePtr);
+
+        Aws::String keyName = Tcl_GetString(key);
+        Aws::DynamoDB::Model::AttributeDefinition hashKey;
+        hashKey.SetAttributeName(keyName);
+        hashKey.SetAttributeType(get_attribute_type(Tcl_GetString(attrTypePtr))); // Aws::DynamoDB::Model::ScalarAttributeType::S
+        request.AddAttributeDefinitions(hashKey);
+
+        Aws::DynamoDB::Model::KeySchemaElement keySchemaElement;
+        keySchemaElement.WithAttributeName(keyName).WithKeyType(get_key_type(Tcl_GetString(keyTypePtr))); // Aws::DynamoDB::Model::KeyType::HASH
+        request.AddKeySchema(keySchemaElement);
+    }
+    Tcl_DictObjDone(&search);
+
+    request.SetBillingMode(Aws::DynamoDB::Model::BillingMode::PAY_PER_REQUEST);
+
+//    Aws::DynamoDB::Model::ProvisionedThroughput throughput;
+//    throughput.WithReadCapacityUnits(5).WithWriteCapacityUnits(5);
+//    request.SetProvisionedThroughput(throughput);
+//    request.SetTableName(tableName);
+
+    const Aws::DynamoDB::Model::CreateTableOutcome &outcome = client->CreateTable(request);
+
+    if (outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewBooleanObj(true));
+        return TCL_OK;
+    } else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
 int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -318,6 +403,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
             "get_item",
             "update_item",
             "delete_item",
+            "create_table",
             nullptr
     };
 
@@ -327,6 +413,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
         m_getItem,
         m_updateItem,
         m_deleteItem,
+        m_createTable
     };
 
     if (objc < 2) {
@@ -363,6 +450,14 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                 break;
             case m_deleteItem:
                 break;
+            case m_createTable:
+                CheckArgs(4, 4, 1, "create_table table key_schema_dict");
+                return aws_sdk_tcl_dynamodb_CreateTable(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        objv[3]
+                );
         }
     }
 
@@ -420,6 +515,12 @@ static int aws_sdk_tcl_dynamodb_GetItemCmd(ClientData clientData, Tcl_Interp *in
     return aws_sdk_tcl_dynamodb_GetItem(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
 }
 
+static int aws_sdk_tcl_dynamodb_CreateTableCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "CreateTableCmd\n"));
+    CheckArgs(4, 4, 1, "handle_name table key_schema_dict");
+    return aws_sdk_tcl_dynamodb_CreateTable(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
+}
+
 static void aws_sdk_tcl_dynamodb_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_dynamodb_NameToInternal_HT);
@@ -452,6 +553,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::destroy", aws_sdk_tcl_dynamodb_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::put_item", aws_sdk_tcl_dynamodb_PutItemCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::get_item", aws_sdk_tcl_dynamodb_GetItemCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::create_table", aws_sdk_tcl_dynamodb_CreateTableCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_dynamodb", "0.1");
 }
