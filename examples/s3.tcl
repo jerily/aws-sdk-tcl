@@ -58,5 +58,17 @@ puts after_batch_delete=[$s3_client ls $bucket_name]
 
 $s3_client delete_bucket $bucket_name
 
+for {set i 0} {$i < 3} {incr i} {
+    set bucket_name "my-bucket-$i"
+    $s3_client create_bucket $bucket_name
+}
+puts buckets_before_delete=[$s3_client list_buckets]
+for {set i 0} {$i < 3} {incr i} {
+    set bucket_name "my-bucket-$i"
+    $s3_client delete_bucket $bucket_name
+}
+puts buckets_after_delete=[$s3_client list_buckets]
+
+
 #::aws::s3::destroy $s3_client
 $s3_client destroy

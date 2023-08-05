@@ -128,8 +128,6 @@ int aws_sdk_tcl_s3_List(Tcl_Interp *interp, const char *handle, const char *buck
 
     if (!outcome.IsSuccess()) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
-//        std::cerr << "Error: ListObjects: " <<
-//                  outcome.GetError().GetMessage() << std::endl;
         return TCL_ERROR;
     }
     else {
@@ -138,7 +136,6 @@ int aws_sdk_tcl_s3_List(Tcl_Interp *interp, const char *handle, const char *buck
 
         Tcl_Obj *listObj = Tcl_NewListObj(0, nullptr);
         for (Aws::S3::Model::Object &object: objects) {
-            std::cout << object.GetKey() << std::endl;
             Tcl_ListObjAppendElement(interp, listObj, Tcl_NewStringObj(object.GetKey().c_str(), -1));
         }
         Tcl_SetObjResult(interp, listObj);
@@ -414,6 +411,29 @@ int aws_sdk_tcl_s3_ExistsBucket(Tcl_Interp *interp, const char *handle, const ch
     return TCL_OK;
 }
 
+int aws_sdk_tcl_s3_ListBuckets(Tcl_Interp *interp, const char *handle) {
+    Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+    auto outcome = client->ListBuckets();
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+    else {
+        Tcl_Obj *listObj = Tcl_NewListObj(0, nullptr);
+        for (auto &&b: outcome.GetResult().GetBuckets()) {
+            Tcl_ListObjAppendElement(interp, listObj, Tcl_NewStringObj(b.GetName().c_str(), -1));
+        }
+        Tcl_SetObjResult(interp, listObj);
+        return TCL_OK;
+    }
+
+    return TCL_OK;
+}
+
 int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -427,6 +447,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
             "create_bucket",
             "delete_bucket",
             "exists_bucket",
+            "list_buckets",
             nullptr
     };
 
@@ -441,7 +462,8 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
         m_exists,
         m_createBucket,
         m_deleteBucket,
-        m_existsBucket
+        m_existsBucket,
+        m_listBuckets
     };
 
     if (objc < 2) {
@@ -457,9 +479,11 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
         const char *handle = Tcl_GetString(objv[0]);
         switch ((enum clientMethod) methodIndex ) {
             case m_destroy:
+                DBG(fprintf(stderr, "DestroyMethod\n"));
                 CheckArgs(2,2,1,"destroy");
                 return aws_sdk_tcl_s3_Destroy(interp, handle);
             case m_ls:
+                DBG(fprintf(stderr, "ListMethod\n"));
                 CheckArgs(3,4,1,"ls bucket ?prefix?");
                 return aws_sdk_tcl_s3_List(
                         interp,
@@ -468,6 +492,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         objc == 4 ? Tcl_GetString(objv[3]) : nullptr
                 );
             case m_putText:
+                DBG(fprintf(stderr, "PutTextMethod\n"));
                 CheckArgs(5,5,1,"put_text bucket prefix text");
                 return aws_sdk_tcl_s3_PutText(
                         interp,
@@ -477,6 +502,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[4])
                 );
             case m_put:
+                DBG(fprintf(stderr, "PutMethod\n"));
                 CheckArgs(5,5,1,"put bucket prefix filename");
                 return aws_sdk_tcl_s3_PutChannel(
                         interp,
@@ -486,6 +512,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[4])
                 );
             case m_get:
+                DBG(fprintf(stderr, "GetMethod\n"));
                 CheckArgs(4,5,1,"get bucket prefix ?filename?");
                 return aws_sdk_tcl_s3_Get(
                         interp,
@@ -495,6 +522,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         objc == 5 ? Tcl_GetString(objv[4]) : nullptr
                 );
             case m_delete:
+                DBG(fprintf(stderr, "DeleteMethod\n"));
                 CheckArgs(4,4,1,"delete bucket key");
                 return aws_sdk_tcl_s3_Delete(
                         interp,
@@ -503,6 +531,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[3])
                 );
             case m_batchDelete:
+                DBG(fprintf(stderr, "BatchDeleteMethod\n"));
                 CheckArgs(4,4,1,"batch_delete bucket keys");
                 return aws_sdk_tcl_s3_BatchDelete(
                         interp,
@@ -511,6 +540,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         objv[3]
                 );
             case m_exists:
+                DBG(fprintf(stderr, "ExistsMethod\n"));
                 CheckArgs(4,4,1,"exists bucket key");
                 return aws_sdk_tcl_s3_Exists(
                         interp,
@@ -519,6 +549,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[3])
                 );
             case m_createBucket:
+                DBG(fprintf(stderr, "CreateBucketMethod\n"));
                 CheckArgs(3,3,1,"create_bucket bucket");
                 return aws_sdk_tcl_s3_CreateBucket(
                         interp,
@@ -526,6 +557,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[2])
                 );
             case m_deleteBucket:
+                DBG(fprintf(stderr, "DeleteBucketMethod\n"));
                 CheckArgs(3,3,1,"delete_bucket bucket");
                 return aws_sdk_tcl_s3_DeleteBucket(
                         interp,
@@ -533,11 +565,19 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[2])
                 );
             case m_existsBucket:
+                DBG(fprintf(stderr, "ExistsBucketMethod\n"));
                 CheckArgs(3,3,1,"exists_bucket bucket");
                 return aws_sdk_tcl_s3_ExistsBucket(
                         interp,
                         handle,
                         Tcl_GetString(objv[2])
+                );
+            case m_listBuckets:
+                DBG(fprintf(stderr, "ListBucketsMethod\n"));
+                CheckArgs(2,2,1,"list_buckets");
+                return aws_sdk_tcl_s3_ListBuckets(
+                        interp,
+                        handle
                 );
         }
     }
@@ -616,7 +656,7 @@ static int aws_sdk_tcl_s3_DeleteCmd(ClientData  clientData, Tcl_Interp *interp, 
 }
 
 static int aws_sdk_tcl_s3_BatchDeleteCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
-    DBG(fprintf(stderr, "DeleteCmd\n"));
+    DBG(fprintf(stderr, "BatchDeleteCmd\n"));
     CheckArgs(4,4,1,"handle_name bucket keys");
     return aws_sdk_tcl_s3_BatchDelete(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), objv[3]);
 }
@@ -643,6 +683,12 @@ static int aws_sdk_tcl_s3_ExistsBucketCmd(ClientData  clientData, Tcl_Interp *in
     DBG(fprintf(stderr, "ExistsBucketCmd\n"));
     CheckArgs(3,3,1,"handle_name bucket");
     return aws_sdk_tcl_s3_ExistsBucket(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
+}
+
+static int aws_sdk_tcl_s3_ListBucketsCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "ListBucketsCmd\n"));
+    CheckArgs(2,2,1,"handle_name");
+    return aws_sdk_tcl_s3_ListBuckets(interp, Tcl_GetString(objv[1]));
 }
 
 static void aws_sdk_tcl_s3_ExitHandler(ClientData unused)
@@ -686,6 +732,7 @@ int Aws_sdk_tcl_s3_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::s3::create_bucket", aws_sdk_tcl_s3_CreateBucketCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::delete_bucket", aws_sdk_tcl_s3_DeleteBucketCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::exists_bucket", aws_sdk_tcl_s3_ExistsBucketCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::list_buckets", aws_sdk_tcl_s3_ListBucketsCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_s3", "0.1");
 }
