@@ -42,6 +42,8 @@ Install [localstack](https://docs.localstack.cloud/getting-started/installation/
 
 ```bash
 LS_LOG=trace localstack start
+# Depending on your setup you may need to set LD_LIBRARY_PATH
+# export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 tclsh ${TCL_AWS_DIR}/examples/s3.tcl
 tclsh ${TCL_AWS_DIR}/examples/dynamodb.tcl
 ```
