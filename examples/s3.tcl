@@ -33,10 +33,10 @@ puts files=[glob myfile.*]
 set lst [::aws::s3::ls $s3_client $bucket_name "text.txt"]
 puts lst_after_delete=$lst
 
-#set from_chan [open [file join $dir "Google_2015_logo.png"] "rb"]
+#set from_chan [open [file join $dir .. "Google_2015_logo.png"] "rb"]
 #::aws::s3::put $s3_client $bucket_name "my_logo.png" $from_chan
 #close $from_chan
-::aws::s3::put $s3_client $bucket_name "my_logo.png" [file join $dir "Google_2015_logo.png"]
+::aws::s3::put $s3_client $bucket_name "my_logo.png" [file join $dir .. "Google_2015_logo.png"]
 #set to_chan [open "mylogo.png" "wb"]
 #::aws::s3::get $s3_client $bucket_name "my_logo.png" $to_chan
 #close $to_chan

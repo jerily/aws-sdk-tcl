@@ -14,6 +14,7 @@ cmake --install . --config=Release
 ```bash
 mkdir build
 cd build
-cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+#cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Debug
 tclsh ../example.tcl
 ```

@@ -1,5 +1,5 @@
-#ifndef TBERT_LIBRARY_H
-#define TBERT_LIBRARY_H
+#ifndef AWS_SDK_TCL_S3_LIBRARY_H
+#define AWS_SDK_TCL_S3_LIBRARY_H
 
 #ifdef USE_NAVISERVER
 #include "ns.h"
@@ -22,4 +22,4 @@ NS_EXTERN int Ns_ModuleInit(const char *server, const char *module);
 }
 #endif
 
-#endif //TBERT_LIBRARY_H
+#endif //AWS_SDK_TCL_S3_LIBRARY_H
