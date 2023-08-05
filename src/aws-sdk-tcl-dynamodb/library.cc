@@ -104,14 +104,14 @@ std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value_to_lis
     std::vector<std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> list_attr_value;
     int length;
     Tcl_ListObjLength(interp, listPtr, &length);
-    fprintf(stderr, "set_attribute_value_to_list, length: %d\n", length);
+    DBG(fprintf(stderr, "set_attribute_value_to_list, length: %d\n", length));
     for (int i = 0; i < length; i++) {
         Tcl_Obj *list_valuePtr;
         Tcl_ListObjIndex(interp, listPtr, i, &list_valuePtr);
         auto list_attrValue = set_attribute_value(interp, list_valuePtr);
         list_attr_value.push_back(list_attrValue);
     }
-    fprintf(stderr, "set_attribute_value_to_list, size: %lu\n", list_attr_value.size());
+    DBG(fprintf(stderr, "set_attribute_value_to_list, size: %lu\n", list_attr_value.size()));
     return std::make_shared<Aws::DynamoDB::Model::AttributeValue>(Aws::DynamoDB::Model::AttributeValue().SetL(list_attr_value));
 }
 
@@ -119,7 +119,7 @@ std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value_to_map
     std::map<std::string, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> map_attr_value;
     int length;
     Tcl_ListObjLength(interp, listPtr, &length);
-    fprintf(stderr, "set_attribute_value_to_map, length: %d\n", length);
+    DBG(fprintf(stderr, "set_attribute_value_to_map, length: %d\n", length));
     for (int i = 0; i < length; i+=2) {
         Tcl_Obj *list_keyPtr, *list_valuePtr;
         Tcl_ListObjIndex(interp, listPtr, i, &list_keyPtr);
@@ -131,10 +131,10 @@ std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value_to_map
         // result variable holds a pair, where the first element is an iterator to the inserted element
         // and the second element is a bool indicating whether insertion took place
         if (!result.second) {
-            fprintf(stderr, "Duplicate key in map\n");
+            DBG(fprintf(stderr, "Duplicate key in map\n"));
         }
     }
-    fprintf(stderr, "set_attribute_value_to_map, map size: %lu\n", map_attr_value.size());
+    DBG(fprintf(stderr, "set_attribute_value_to_map, map size: %lu\n", map_attr_value.size()));
     return std::make_shared<Aws::DynamoDB::Model::AttributeValue>(Aws::DynamoDB::Model::AttributeValue().SetM(map_attr_value));
 }
 
