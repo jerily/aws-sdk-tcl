@@ -377,15 +377,10 @@ static int aws_sdk_tcl_dynamodb_CreateCmd(ClientData clientData, Tcl_Interp *int
     CheckArgs(2, 2, 1, "config_dict");
 
     Aws::Client::ClientConfiguration clientConfig;
-    Tcl_Obj *profile;
     Tcl_Obj *region;
     Tcl_Obj *endpoint;
-    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("profile", -1), &profile);
     Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("region", -1), &region);
     Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("endpoint", -1), &endpoint);
-    if (profile) {
-        clientConfig.profileName = Tcl_GetString(profile);
-    }
     if (region) {
         clientConfig.region = Tcl_GetString(region);
     }

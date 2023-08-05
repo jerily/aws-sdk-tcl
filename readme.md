@@ -18,3 +18,10 @@ cd build
 cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
 tclsh ../example.tcl
 ```
+
+## Try out the examples
+```bash
+LS_LOG=trace localstack start
+tclsh examples/s3.tcl
+tclsh examples/dynamodb.tcl
+```

@@ -5,6 +5,7 @@
 #include "aws/s3/model/PutObjectRequest.h"
 #include "aws/s3/model/GetObjectRequest.h"
 #include "aws/s3/model/DeleteObjectRequest.h"
+#include "aws/s3/model/HeadObjectRequest.h"
 #include <aws/s3/model/Object.h>
 #include <cstdio>
 #include <fstream>
@@ -288,6 +289,27 @@ int aws_sdk_tcl_s3_Delete(Tcl_Interp *interp, const char *handle, const char *bu
     }
 }
 
+int aws_sdk_tcl_s3_Exists(Tcl_Interp *interp, const char *handle, const char *bucket_name, const char *key_name) {
+    Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    const Aws::String bucket = bucket_name;
+    const Aws::String key = key_name;
+
+    Aws::S3::Model::HeadObjectRequest request;
+    request.WithKey(key)
+            .WithBucket(bucket);
+
+    Aws::S3::Model::HeadObjectOutcome outcome =
+            client->HeadObject(request);
+
+    Tcl_SetObjResult(interp, Tcl_NewBooleanObj(outcome.IsSuccess()));
+    return TCL_OK;
+}
+
 int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -296,6 +318,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
             "put",
             "get",
             "delete",
+            "exists",
             nullptr
     };
 
@@ -305,7 +328,8 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
         m_putText,
         m_put,
         m_get,
-        m_delete
+        m_delete,
+        m_exists
     };
 
     if (objc < 2) {
@@ -359,8 +383,16 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         objc == 5 ? Tcl_GetString(objv[4]) : nullptr
                 );
             case m_delete:
-                CheckArgs(4,4,1,"delete bucket prefix");
+                CheckArgs(4,4,1,"delete bucket key");
                 return aws_sdk_tcl_s3_Delete(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        Tcl_GetString(objv[3])
+                );
+            case m_exists:
+                CheckArgs(4,4,1,"exists bucket key");
+                return aws_sdk_tcl_s3_Exists(
                         interp,
                         handle,
                         Tcl_GetString(objv[2]),
@@ -379,15 +411,10 @@ static int aws_sdk_tcl_s3_CreateCmd(ClientData  clientData, Tcl_Interp *interp, 
     CheckArgs(2,2,1,"config_dict");
 
     Aws::Client::ClientConfiguration clientConfig;
-    Tcl_Obj *profile;
     Tcl_Obj *region;
     Tcl_Obj *endpoint;
-    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("profile", -1), &profile);
     Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("region", -1), &region);
     Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("endpoint", -1), &endpoint);
-    if (profile) {
-        clientConfig.profileName = Tcl_GetString(profile);
-    }
     if (region) {
         clientConfig.region = Tcl_GetString(region);
     }
@@ -447,6 +474,12 @@ static int aws_sdk_tcl_s3_DeleteCmd(ClientData  clientData, Tcl_Interp *interp, 
     return aws_sdk_tcl_s3_Delete(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), Tcl_GetString(objv[3]));
 }
 
+static int aws_sdk_tcl_s3_ExistsCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "ExistsCmd\n"));
+    CheckArgs(4,4,1,"handle_name bucket key");
+    return aws_sdk_tcl_s3_Exists(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), Tcl_GetString(objv[3]));
+}
+
 static void aws_sdk_tcl_s3_ExitHandler(ClientData unused)
 {
     Tcl_MutexLock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
@@ -483,6 +516,7 @@ int Aws_sdk_tcl_s3_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::s3::put", aws_sdk_tcl_s3_PutChannelCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::get", aws_sdk_tcl_s3_GetCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::delete", aws_sdk_tcl_s3_DeleteCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::exists", aws_sdk_tcl_s3_ExistsCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "aws_sdk_tcl_s3", "0.1");
 }
