@@ -16,7 +16,6 @@ For TCL:
 mkdir build
 cd build
 cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
-tclsh ../example.tcl
 ```
 
 ## Try out the examples
@@ -25,3 +24,8 @@ LS_LOG=trace localstack start
 tclsh examples/s3.tcl
 tclsh examples/dynamodb.tcl
 ```
+
+## Documentation
+
+* [TCL S3](./src/aws-sdk-tcl-s3/)
+* [TCL DynamoDB](./src/aws-sdk-tcl-dynamodb/)
