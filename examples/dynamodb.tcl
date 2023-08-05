@@ -33,19 +33,20 @@ puts item=$item
 
 $client delete_table $table
 
-$client create_table NewTable [dict create id [list N HASH] timestamp [list N RANGE]]
-$client put_item NewTable [dict create id [list N 1] timestamp [list N 1234567890]]
-$client put_item NewTable [dict create id [list N 1] timestamp [list N 1234567891]]
-$client put_item NewTable [dict create id [list N 1] timestamp [list N 1234567892]]
-$client put_item NewTable [dict create id [list N 1] timestamp [list N 1234567893]]
-$client put_item NewTable [dict create id [list N 2] timestamp [list N 1234567894]]
-$client put_item NewTable [dict create id [list N 2] timestamp [list N 1234567895]]
-$client put_item NewTable [dict create id [list N 2] timestamp [list N 1234567896]]
+$client create_table NewTable [dict create id [list N HASH] ts [list N RANGE]]
+$client put_item NewTable [dict create id [list N 1] ts [list N 1234567890]]
+$client put_item NewTable [dict create id [list N 1] ts [list N 1234567891]]
+$client put_item NewTable [dict create id [list N 1] ts [list N 1234567892]]
+$client put_item NewTable [dict create id [list N 1] ts [list N 1234567893]]
+$client put_item NewTable [dict create id [list N 2] ts [list N 1234567894]]
+$client put_item NewTable [dict create id [list N 2] ts [list N 1234567895]]
+$client put_item NewTable [dict create id [list N 2] ts [list N 1234567896]]
 
 puts query_items_1=[$client query NewTable [dict create id [list N 1]]]
 puts query_items_1_backward=[$client query NewTable [dict create id [list N 1]] false]
 puts query_items_1_backward_limit_2=[$client query NewTable [dict create id [list N 1]] false 2]
 puts query_items_2=[$client query NewTable [dict create id [list N 2]] true 2]
+puts query_items_id_and_timestamp=[$client query NewTable [dict create id [list N 1] ts [list N 1234567890]]]
 $client delete_table NewTable
 
 $client destroy
