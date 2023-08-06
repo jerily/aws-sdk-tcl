@@ -120,11 +120,33 @@ int aws_sdk_tcl_lambda_ListFunctions(Tcl_Interp *interp, const char *handle) {
 //            std::cout << result.GetFunctions().size() << " lambda functions were retrieved." << std::endl;
 
             for (const Aws::Lambda::Model::FunctionConfiguration &functionConfiguration: result.GetFunctions()) {
-                Tcl_ListObjAppendElement(interp, resultObj,
-                                         Tcl_NewStringObj(functionConfiguration.GetFunctionName().c_str(), -1));
+                Tcl_Obj *dictPtr = Tcl_NewDictObj();
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("name", -1),
+                               Tcl_NewStringObj(functionConfiguration.GetFunctionName().c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("description", -1),
+                                 Tcl_NewStringObj(functionConfiguration.GetDescription().c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("runtime", -1),
+                                 Tcl_NewStringObj(Aws::Lambda::Model::RuntimeMapper::GetNameForRuntime(functionConfiguration.GetRuntime()).c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("role", -1),
+                                    Tcl_NewStringObj(functionConfiguration.GetRole().c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("handler", -1),
+                                    Tcl_NewStringObj(functionConfiguration.GetHandler().c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("code_size", -1),
+                                    Tcl_NewLongObj(functionConfiguration.GetCodeSize()));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("timeout", -1),
+                                    Tcl_NewIntObj(functionConfiguration.GetTimeout()));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("memory_size", -1),
+                                    Tcl_NewIntObj(functionConfiguration.GetMemorySize()));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("last_modified", -1),
+                                    Tcl_NewStringObj(functionConfiguration.GetLastModified().c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("code_sha_256", -1),
+                                    Tcl_NewStringObj(functionConfiguration.GetCodeSha256().c_str(), -1));
+                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("version", -1),
+                                    Tcl_NewStringObj(functionConfiguration.GetVersion().c_str(), -1));
+//                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("vpc_config", -1),
+//                                    Tcl_NewStringObj(functionConfiguration.GetVpcConfig().ToString().c_str(), -1));
 
-//                std::cout << functions.size() << "  " << functionConfiguration.GetDescription() << std::endl;
-//                std::cout << "   " << Aws::Lambda::Model::RuntimeMapper::GetNameForRuntime(functionConfiguration.GetRuntime()) << ": " << functionConfiguration.GetHandler() << std::endl;
+                Tcl_ListObjAppendElement(interp, resultObj,dictPtr);
             }
             marker = result.GetNextMarker();
         }
