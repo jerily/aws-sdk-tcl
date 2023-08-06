@@ -53,3 +53,4 @@ tclsh ${TCL_AWS_DIR}/examples/dynamodb.tcl
 
 * [TCL S3](./src/aws-sdk-tcl-s3/)
 * [TCL DynamoDB](./src/aws-sdk-tcl-dynamodb/)
+* [TCL Lambda](./src/aws-sdk-tcl-lambda/)
