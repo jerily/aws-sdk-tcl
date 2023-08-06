@@ -901,7 +901,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::delete_table", aws_sdk_tcl_dynamodb_DeleteTableCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::list_tables", aws_sdk_tcl_dynamodb_ListTablesCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "aws_sdk_tcl_dynamodb", "0.1");
+    return Tcl_PkgProvide(interp, "awsdynamodb", "0.1");
 }
 
 #ifdef USE_NAVISERVER
