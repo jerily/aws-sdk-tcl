@@ -95,6 +95,115 @@ int aws_sdk_tcl_lambda_Destroy(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
+Tcl_Obj *get_dict_from_function_configuration(Tcl_Interp *interp, const Aws::Lambda::Model::FunctionConfiguration &functionConfiguration) {
+    Tcl_Obj *dictPtr = Tcl_NewDictObj();
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("function_name", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetFunctionName().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("function_arn", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetFunctionArn().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("description", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetDescription().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("runtime", -1),
+                   Tcl_NewStringObj(Aws::Lambda::Model::RuntimeMapper::GetNameForRuntime(functionConfiguration.GetRuntime()).c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("role", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetRole().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("handler", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetHandler().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("code_size", -1),
+                   Tcl_NewLongObj(functionConfiguration.GetCodeSize()));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("timeout", -1),
+                   Tcl_NewIntObj(functionConfiguration.GetTimeout()));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("memory_size", -1),
+                   Tcl_NewIntObj(functionConfiguration.GetMemorySize()));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("last_modified", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetLastModified().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("code_sha_256", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetCodeSha256().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("kms_key_arn", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetKMSKeyArn().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("package_type", -1),
+                   Tcl_NewStringObj(Aws::Lambda::Model::PackageTypeMapper::GetNameForPackageType(functionConfiguration.GetPackageType()).c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("version", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetVersion().c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("revision_id", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetRevisionId().c_str(), -1));
+
+    // vpc config
+    Tcl_Obj *vpcConfigDictPtr = Tcl_NewDictObj();
+    Tcl_DictObjPut(interp, vpcConfigDictPtr, Tcl_NewStringObj("vpc_id", -1),
+                   Tcl_NewStringObj(functionConfiguration.GetVpcConfig().GetVpcId().c_str(), -1));
+    Tcl_Obj *subnetsListObj = Tcl_NewListObj(0, nullptr);
+    for (const Aws::String &subnetId: functionConfiguration.GetVpcConfig().GetSubnetIds()) {
+        Tcl_ListObjAppendElement(interp, subnetsListObj, Tcl_NewStringObj(subnetId.c_str(), -1));
+    }
+    Tcl_DictObjPut(interp, vpcConfigDictPtr, Tcl_NewStringObj("subnet_ids", -1), subnetsListObj);
+    Tcl_Obj *securityGroupsListObj = Tcl_NewListObj(0, nullptr);
+    for (const Aws::String &securityGroupId: functionConfiguration.GetVpcConfig().GetSecurityGroupIds()) {
+        Tcl_ListObjAppendElement(interp, securityGroupsListObj, Tcl_NewStringObj(securityGroupId.c_str(), -1));
+    }
+    Tcl_DictObjPut(interp, vpcConfigDictPtr, Tcl_NewStringObj("security_group_ids", -1), securityGroupsListObj);
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("vpc_config", -1), vpcConfigDictPtr);
+
+    // environment
+    Tcl_Obj *environmentDictPtr = Tcl_NewDictObj();
+    Tcl_Obj *variablesDictPtr = Tcl_NewDictObj();
+    for (const auto &variable: functionConfiguration.GetEnvironment().GetVariables()) {
+        Tcl_DictObjPut(interp, variablesDictPtr, Tcl_NewStringObj(variable.first.c_str(), -1),
+                       Tcl_NewStringObj(variable.second.c_str(), -1));
+    }
+    Tcl_DictObjPut(interp, environmentDictPtr, Tcl_NewStringObj("variables", -1), variablesDictPtr);
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("environment", -1), environmentDictPtr);
+
+    // tracing config
+    Tcl_Obj *tracingConfigDictPtr = Tcl_NewDictObj();
+    Tcl_DictObjPut(interp, tracingConfigDictPtr, Tcl_NewStringObj("mode", -1),
+                   Tcl_NewStringObj(Aws::Lambda::Model::TracingModeMapper::GetNameForTracingMode(functionConfiguration.GetTracingConfig().GetMode()).c_str(), -1));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("tracing_config", -1), tracingConfigDictPtr);
+
+    // architectures
+    Tcl_Obj *architecturesListObj = Tcl_NewListObj(0, nullptr);
+    for (const auto &architecture: functionConfiguration.GetArchitectures()) {
+        Tcl_ListObjAppendElement(interp, architecturesListObj, Tcl_NewStringObj(Aws::Lambda::Model::ArchitectureMapper::GetNameForArchitecture(architecture).c_str(), -1));
+    }
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("architectures", -1), architecturesListObj);
+
+    // ephemeral storage
+    Tcl_Obj *ephemeralStorageDictPtr = Tcl_NewDictObj();
+    Tcl_DictObjPut(interp, ephemeralStorageDictPtr, Tcl_NewStringObj("size", -1),
+                   Tcl_NewIntObj(functionConfiguration.GetEphemeralStorage().GetSize()));
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("ephemeral_storage", -1), ephemeralStorageDictPtr);
+
+    // file system configs
+    Tcl_Obj *fileSystemConfigsListObj = Tcl_NewListObj(0, nullptr);
+    for (const auto &fileSystemConfig: functionConfiguration.GetFileSystemConfigs()) {
+        Tcl_Obj *fileSystemConfigDictPtr = Tcl_NewDictObj();
+        Tcl_DictObjPut(interp, fileSystemConfigDictPtr, Tcl_NewStringObj("arn", -1),
+                       Tcl_NewStringObj(fileSystemConfig.GetArn().c_str(), -1));
+        Tcl_DictObjPut(interp, fileSystemConfigDictPtr, Tcl_NewStringObj("local_mount_path", -1),
+                       Tcl_NewStringObj(fileSystemConfig.GetLocalMountPath().c_str(), -1));
+        Tcl_ListObjAppendElement(interp, fileSystemConfigsListObj, fileSystemConfigDictPtr);
+    }
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("file_system_configs", -1), fileSystemConfigsListObj);
+
+    // layers
+    Tcl_Obj *layersListObj = Tcl_NewListObj(0, nullptr);
+    for (const auto &layer: functionConfiguration.GetLayers()) {
+        Tcl_Obj *layerDictPtr = Tcl_NewDictObj();
+        Tcl_DictObjPut(interp, layerDictPtr, Tcl_NewStringObj("arn", -1),
+                       Tcl_NewStringObj(layer.GetArn().c_str(), -1));
+        Tcl_DictObjPut(interp, layerDictPtr, Tcl_NewStringObj("code_size", -1),
+                       Tcl_NewLongObj(layer.GetCodeSize()));
+        Tcl_DictObjPut(interp, layerDictPtr, Tcl_NewStringObj("signing_profile_version_arn", -1),
+                       Tcl_NewStringObj(layer.GetSigningProfileVersionArn().c_str(), -1));
+        Tcl_DictObjPut(interp, layerDictPtr, Tcl_NewStringObj("signing_job_arn", -1),
+                       Tcl_NewStringObj(layer.GetSigningJobArn().c_str(), -1));
+        Tcl_ListObjAppendElement(interp, layersListObj, layerDictPtr);
+    }
+    Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("layers", -1), layersListObj);
+
+    return dictPtr;
+}
+
 int aws_sdk_tcl_lambda_ListFunctions(Tcl_Interp *interp, const char *handle) {
     DBG(fprintf(stderr, "aws_sdk_tcl_lambda_ListFunctions: handle=%s\n", handle));
     Aws::Lambda::LambdaClient *client = aws_sdk_tcl_lambda_GetInternalFromName(handle);
@@ -120,82 +229,7 @@ int aws_sdk_tcl_lambda_ListFunctions(Tcl_Interp *interp, const char *handle) {
 //            std::cout << result.GetFunctions().size() << " lambda functions were retrieved." << std::endl;
 
             for (const Aws::Lambda::Model::FunctionConfiguration &functionConfiguration: result.GetFunctions()) {
-                Tcl_Obj *dictPtr = Tcl_NewDictObj();
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("function_name", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetFunctionName().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("function_arn", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetFunctionArn().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("description", -1),
-                                 Tcl_NewStringObj(functionConfiguration.GetDescription().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("runtime", -1),
-                                 Tcl_NewStringObj(Aws::Lambda::Model::RuntimeMapper::GetNameForRuntime(functionConfiguration.GetRuntime()).c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("role", -1),
-                                    Tcl_NewStringObj(functionConfiguration.GetRole().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("handler", -1),
-                                    Tcl_NewStringObj(functionConfiguration.GetHandler().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("code_size", -1),
-                                    Tcl_NewLongObj(functionConfiguration.GetCodeSize()));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("timeout", -1),
-                                    Tcl_NewIntObj(functionConfiguration.GetTimeout()));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("memory_size", -1),
-                                    Tcl_NewIntObj(functionConfiguration.GetMemorySize()));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("last_modified", -1),
-                                    Tcl_NewStringObj(functionConfiguration.GetLastModified().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("code_sha_256", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetCodeSha256().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("kms_key_arn", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetKMSKeyArn().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("package_type", -1),
-                               Tcl_NewStringObj(Aws::Lambda::Model::PackageTypeMapper::GetNameForPackageType(functionConfiguration.GetPackageType()).c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("version", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetVersion().c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("revision_id", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetRevisionId().c_str(), -1));
-
-                // vpc config
-                Tcl_Obj *vpcConfigDictPtr = Tcl_NewDictObj();
-                Tcl_DictObjPut(interp, vpcConfigDictPtr, Tcl_NewStringObj("vpc_id", -1),
-                               Tcl_NewStringObj(functionConfiguration.GetVpcConfig().GetVpcId().c_str(), -1));
-                Tcl_Obj *subnetsListObj = Tcl_NewListObj(0, nullptr);
-                for (const Aws::String &subnetId: functionConfiguration.GetVpcConfig().GetSubnetIds()) {
-                    Tcl_ListObjAppendElement(interp, subnetsListObj, Tcl_NewStringObj(subnetId.c_str(), -1));
-                }
-                Tcl_DictObjPut(interp, vpcConfigDictPtr, Tcl_NewStringObj("subnet_ids", -1), subnetsListObj);
-                Tcl_Obj *securityGroupsListObj = Tcl_NewListObj(0, nullptr);
-                for (const Aws::String &securityGroupId: functionConfiguration.GetVpcConfig().GetSecurityGroupIds()) {
-                    Tcl_ListObjAppendElement(interp, securityGroupsListObj, Tcl_NewStringObj(securityGroupId.c_str(), -1));
-                }
-                Tcl_DictObjPut(interp, vpcConfigDictPtr, Tcl_NewStringObj("security_group_ids", -1), securityGroupsListObj);
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("vpc_config", -1), vpcConfigDictPtr);
-
-                // environment
-                Tcl_Obj *environmentDictPtr = Tcl_NewDictObj();
-                Tcl_Obj *variablesDictPtr = Tcl_NewDictObj();
-                for (const auto &variable: functionConfiguration.GetEnvironment().GetVariables()) {
-                    Tcl_DictObjPut(interp, variablesDictPtr, Tcl_NewStringObj(variable.first.c_str(), -1),
-                                   Tcl_NewStringObj(variable.second.c_str(), -1));
-                }
-                Tcl_DictObjPut(interp, environmentDictPtr, Tcl_NewStringObj("variables", -1), variablesDictPtr);
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("environment", -1), environmentDictPtr);
-
-                // tracing config
-                Tcl_Obj *tracingConfigDictPtr = Tcl_NewDictObj();
-                Tcl_DictObjPut(interp, tracingConfigDictPtr, Tcl_NewStringObj("mode", -1),
-                               Tcl_NewStringObj(Aws::Lambda::Model::TracingModeMapper::GetNameForTracingMode(functionConfiguration.GetTracingConfig().GetMode()).c_str(), -1));
-                Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("tracing_config", -1), tracingConfigDictPtr);
-
-                // architectures
-                Tcl_Obj *architecturesListObj = Tcl_NewListObj(0, nullptr);
-                for (const auto &architecture: functionConfiguration.GetArchitectures()) {
-                    Tcl_ListObjAppendElement(interp, architecturesListObj, Tcl_NewStringObj(Aws::Lambda::Model::ArchitectureMapper::GetNameForArchitecture(architecture).c_str(), -1));
-                }
-
-                // ephemeral storage
-                Tcl_Obj *ephemeralStorageDictPtr = Tcl_NewDictObj();
-                Tcl_DictObjPut(interp, ephemeralStorageDictPtr, Tcl_NewStringObj("size", -1),
-                               Tcl_NewIntObj(functionConfiguration.GetEphemeralStorage().GetSize()));
-
-                Tcl_ListObjAppendElement(interp, resultObj,dictPtr);
+                Tcl_ListObjAppendElement(interp, resultObj,get_dict_from_function_configuration(interp, functionConfiguration));
             }
             marker = result.GetNextMarker();
         }
