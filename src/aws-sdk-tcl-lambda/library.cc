@@ -322,7 +322,7 @@ static int aws_sdk_tcl_lambda_DestroyCmd(ClientData clientData, Tcl_Interp *inte
 
 static int aws_sdk_tcl_lambda_ListFunctionsCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "ListFunctionsCmd\n"));
-    CheckArgs(4, 4, 1, "handle_name");
+    CheckArgs(2, 2, 1, "handle_name");
     return aws_sdk_tcl_lambda_ListFunctions(interp, Tcl_GetString(objv[1]));
 }
 
