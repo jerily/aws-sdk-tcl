@@ -11,6 +11,6 @@ $client create_function "my-function" [file join $dir "my-function.zip"] "index.
 #puts lambda_functions=[$client list_functions]
 puts lambda_function_configuration=[$client get_function "my-function"]
 
-#$client invoke_function "my-function" "input.json" "output.json"
+puts invoke_function_output=[$client invoke_function "my-function" {{"message": "Hello World!"}}]
 $client delete_function "my-function"
 $client destroy
