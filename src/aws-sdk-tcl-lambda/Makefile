@@ -5,14 +5,14 @@ endif
 #
 # Module name
 #
-MOD      =  awsdynamodb.so
+MOD      =  awslambda.so
 
 #
 # Objects to build.
 #
 MODOBJS     = library.o
 
-MODLIBS  += -laws-cpp-sdk-core -laws-cpp-sdk-dynamodb
+MODLIBS  += -laws-cpp-sdk-core -laws-cpp-sdk-lambda
 
 CFLAGS += -DUSE_NAVISERVER
 CXXFLAGS += $(CFLAGS)
