@@ -1,5 +1,7 @@
+package require awss3
+
 set dir [file dirname [dict get [info frame 0] file]]
-load [file join $dir .. build src/aws-sdk-tcl-s3 libaws-sdk-tcl-s3.so] Aws_sdk_tcl_s3
+#load [file join $dir .. build src/aws-sdk-tcl-s3 libaws-sdk-tcl-s3.so] Aws_sdk_tcl_s3
 
 set bucket_name "my-bucket"
 
