@@ -45,6 +45,12 @@ static char s3_client_usage[] =
     "   put bucket key input_file       \n"
     "   get bucket key ?output_file?    \n"
     "   delete bucket key               \n"
+    "   batch_delete bucket keys        \n"
+    "   exists bucket key               \n"
+    "   create_bucket bucket            \n"
+    "   delete_bucket bucket            \n"
+    "   exists_bucket bucket            \n"
+    "   list_buckets                    \n"
 ;
 
 

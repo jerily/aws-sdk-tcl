@@ -33,7 +33,13 @@ static Tcl_Mutex aws_sdk_tcl_lambda_NameToInternal_HT_Mutex;
 static int aws_sdk_tcl_lambda_ModuleInitialized;
 
 static char lambda_client_usage[] =
-        "Usage lambdaClient <method> <args>, where method can be:\n";
+        "Usage lambdaClient <method> <args>, where method can be:\n"
+        "   list_functions\n"
+        "   get_function function_name\n"
+        "   create_function function_name function_code_path handler runtime execution_role_arn\n"
+        "   invoke_function function_name payload_json ?invocation_type?\n"
+        "   delete_function function_name\n"
+        ;
 
 
 static int

@@ -34,7 +34,14 @@ static Tcl_Mutex aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex;
 static int aws_sdk_tcl_dynamodb_ModuleInitialized;
 
 static char dynamodb_client_usage[] =
-        "Usage dynamodbClient <method> <args>, where method can be:\n";
+        "Usage dynamodbClient <method> <args>, where method can be:\n"
+        "  put_item table item_dict                                                                             \n"
+        "  get_item table key_dict                                                                              \n"
+        "  query_items table query_dict ?scan_forward? ?limit? ?index_name?                                     \n"
+        "  create_table table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?     \n"
+        "  delete_table table                                                                                   \n"
+        "  list_tables                                                                                          \n"
+        ;
 
 
 static int
