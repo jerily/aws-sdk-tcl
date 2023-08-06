@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl-dynamodb LANGUAGES CXX C)
+project(aws-sdk-tcl-lambda LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(TARGET ${PROJECT_NAME})
@@ -18,9 +18,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 if (NAVISERVER)
 else ()
-    include_directories(aws/dynamodb ${TCL_INCLUDE_PATH})
-    link_directories(aws/dynamodb)
-    target_link_libraries(aws-sdk-tcl-dynamodb PRIVATE aws-cpp-sdk-core aws-cpp-sdk-dynamodb ${TCL_LIBRARY})
+    include_directories(aws/lambda ${TCL_INCLUDE_PATH})
+    link_directories(aws/lambda)
+    target_link_libraries(aws-sdk-tcl-lambda PRIVATE aws-cpp-sdk-core aws-cpp-sdk-lambda ${TCL_LIBRARY})
     get_filename_component(TCL_LIBRARY_PATH "${TCL_LIBRARY}" PATH)
     if (TCL_LIBRARY_PATH)
         install(TARGETS ${TARGET}

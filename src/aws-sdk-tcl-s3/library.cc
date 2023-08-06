@@ -1,3 +1,7 @@
+/**
+ * Copyright Jerily LTD. All Rights Reserved.
+ * SPDX-License-Identifier: MIT.
+ */
 #include <iostream>
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>

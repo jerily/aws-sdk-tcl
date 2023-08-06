@@ -1,3 +1,7 @@
+/**
+ * Copyright Jerily LTD. All Rights Reserved.
+ * SPDX-License-Identifier: MIT.
+ */
 #ifndef AWS_SDK_TCL_S3_LIBRARY_H
 #define AWS_SDK_TCL_S3_LIBRARY_H
 
