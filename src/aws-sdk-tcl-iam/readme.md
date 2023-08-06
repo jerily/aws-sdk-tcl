@@ -1,15 +1,7 @@
-# TCL Lambda Commands
-* **::aws::lambda::create** *config_dict*
-    - returns a handle to a Lambda client
-* **::aws::lambda::list_functions** *handle*
-    - returns a list of Lambda function configurations
-* **::aws::lambda::get_function** *handle* *function_name*
-    - returns a Lambda function configuration
-* **::aws::lambda::create_function** *handle* *function_name* *function_code_path* *handler* *runtime* *execution_role_arn* *?timeout?*
-    - creates a Lambda function
-* **::aws::lambda::invoke_function** *handle* *function_name* *payload* *?invocation_type?*
-    - invokes a Lambda function
-* **::aws::lambda::delete_function** *handle* *function_name*
-    - deletes a Lambda function
-* **::aws::lambda::destroy** *handle*
-    - destroys a Lambda client handle
+# TCL iam Commands
+* **::aws::iam::create** *config_dict*
+    - returns a handle to a iam client
+* **::aws::iam::create_role** *handle* *role_name* *assume_role_policy_document*
+    - creates a iam role
+* **::aws::iam::delete_role** *handle* *role_name*
+    - deletes a iam role
