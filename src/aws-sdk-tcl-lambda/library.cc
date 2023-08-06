@@ -36,7 +36,7 @@ static char lambda_client_usage[] =
         "Usage lambdaClient <method> <args>, where method can be:\n"
         "   list_functions\n"
         "   get_function function_name\n"
-        "   create_function function_name function_code_path handler runtime execution_role_arn\n"
+        "   create_function function_name function_code_path handler runtime execution_role_arn ?timeout?\n"
         "   invoke_function function_name payload_json ?invocation_type?\n"
         "   delete_function function_name\n"
         ;
@@ -281,7 +281,8 @@ int aws_sdk_tcl_lambda_CreateFunction(
         const char *function_code_path,
         const char *handler,
         const char *runtime,
-        const char *execution_role_arn
+        const char *execution_role_arn,
+        Tcl_Obj *timeoutPtr
         ) {
     DBG(fprintf(stderr, "aws_sdk_tcl_lambda_CreateFunction: handle=%s function_name=%s\n", handle, function_name));
     Aws::Lambda::LambdaClient *client = aws_sdk_tcl_lambda_GetInternalFromName(handle);
@@ -295,6 +296,12 @@ int aws_sdk_tcl_lambda_CreateFunction(
     request.SetHandler(handler);
     request.SetRuntime(Aws::Lambda::Model::RuntimeMapper::GetRuntimeForName(runtime));
     request.SetRole(execution_role_arn);
+
+    if (timeoutPtr) {
+        int timeout;
+        Tcl_GetIntFromObj(interp, timeoutPtr, &timeout);
+        request.SetTimeout(timeout);
+    }
 
     Aws::Lambda::Model::FunctionCode code;
     std::ifstream ifstream(function_code_path,std::ios_base::in | std::ios_base::binary);
@@ -431,7 +438,7 @@ int aws_sdk_tcl_lambda_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, i
                         Tcl_GetString(objv[2])
                 );
             case m_createFunction:
-                CheckArgs(7, 7, 1, "create_function function_name function_code_path handler runtime execution_role_arn");
+                CheckArgs(7, 8, 1, "create_function function_name function_code_path handler runtime execution_role_arn ?timeout?");
                 return aws_sdk_tcl_lambda_CreateFunction(
                         interp,
                         handle,
@@ -439,7 +446,8 @@ int aws_sdk_tcl_lambda_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, i
                         Tcl_GetString(objv[3]),
                         Tcl_GetString(objv[4]),
                         Tcl_GetString(objv[5]),
-                        Tcl_GetString(objv[6])
+                        Tcl_GetString(objv[6]),
+                        objc == 8 ? objv[7] : nullptr
                 );
             case m_deleteFunction:
                 CheckArgs(3, 3, 1, "delete_function function_name");
@@ -516,7 +524,7 @@ static int aws_sdk_tcl_lambda_GetFunctionCmd(ClientData clientData, Tcl_Interp *
 
 static int aws_sdk_tcl_lambda_CreateFunctionCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "CreateFunctionCmd\n"));
-    CheckArgs(7, 7, 1, "handle_name function_name function_code_path function_handler runtime execution_role_arn");
+    CheckArgs(7, 8, 1, "handle_name function_name function_code_path function_handler runtime execution_role_arn ?timeout?");
     return aws_sdk_tcl_lambda_CreateFunction(
             interp,
             Tcl_GetString(objv[1]),
@@ -524,7 +532,8 @@ static int aws_sdk_tcl_lambda_CreateFunctionCmd(ClientData clientData, Tcl_Inter
             Tcl_GetString(objv[3]),
             Tcl_GetString(objv[4]),
             Tcl_GetString(objv[5]),
-            Tcl_GetString(objv[6])
+            Tcl_GetString(objv[6]),
+            objc == 8 ? objv[7] : nullptr
             );
 }
 

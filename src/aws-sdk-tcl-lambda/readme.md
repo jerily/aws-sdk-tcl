@@ -5,7 +5,7 @@
     - returns a list of Lambda function configurations
 * **::aws::lambda::get_function** *handle* *function_name*
     - returns a Lambda function configuration
-* **::aws::lambda::create_function** *handle* *function_name* *function_code_path* *handler* *runtime* *execution_role_arn*
+* **::aws::lambda::create_function** *handle* *function_name* *function_code_path* *handler* *runtime* *execution_role_arn* *?timeout?*
     - creates a Lambda function
 * **::aws::lambda::invoke_function** *handle* *function_name* *payload* *?invocation_type?*
     - invokes a Lambda function
