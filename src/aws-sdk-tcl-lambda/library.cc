@@ -8,6 +8,7 @@
 #include <cstdio>
 #include <fstream>
 #include <aws/lambda/model/ListFunctionsRequest.h>
+#include <aws/lambda/model/GetFunctionRequest.h>
 #include "library.h"
 
 #ifdef DEBUG
@@ -243,16 +244,39 @@ int aws_sdk_tcl_lambda_ListFunctions(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
+int aws_sdk_tcl_lambda_GetFunction(Tcl_Interp *interp, const char *handle, const char *function_name) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_lambda_ListFunctions: handle=%s function_name=%s\n", handle, function_name));
+    Aws::Lambda::LambdaClient *client = aws_sdk_tcl_lambda_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::Lambda::Model::GetFunctionRequest request;
+    request.SetFunctionName(function_name);
+    Aws::Lambda::Model::GetFunctionOutcome outcome = client->GetFunction(request);
+    if (outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, get_dict_from_function_configuration(interp, outcome.GetResult().GetConfiguration()));
+        return TCL_OK;
+    }
+    else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
 int aws_sdk_tcl_lambda_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
             "list_functions",
+            "get_function",
             nullptr
     };
 
     enum clientMethod {
         m_destroy,
         m_listFunctions,
+        m_getFunction
     };
 
     if (objc < 2) {
@@ -274,6 +298,13 @@ int aws_sdk_tcl_lambda_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, i
                 return aws_sdk_tcl_lambda_ListFunctions(
                         interp,
                         handle
+                );
+            case m_getFunction:
+                CheckArgs(3, 3, 1, "get_function function_name");
+                return aws_sdk_tcl_lambda_GetFunction(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2])
                 );
         }
     }
@@ -326,6 +357,12 @@ static int aws_sdk_tcl_lambda_ListFunctionsCmd(ClientData clientData, Tcl_Interp
     return aws_sdk_tcl_lambda_ListFunctions(interp, Tcl_GetString(objv[1]));
 }
 
+static int aws_sdk_tcl_lambda_GetFunctionCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "GetFunctionCmd\n"));
+    CheckArgs(3, 3, 1, "handle_name function_name");
+    return aws_sdk_tcl_lambda_GetFunction(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
+}
+
 static void aws_sdk_tcl_lambda_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_lambda_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_lambda_NameToInternal_HT);
@@ -357,6 +394,7 @@ int Aws_sdk_tcl_lambda_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::lambda::create", aws_sdk_tcl_lambda_CreateCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::lambda::destroy", aws_sdk_tcl_lambda_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::lambda::list_functions", aws_sdk_tcl_lambda_ListFunctionsCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::lambda::get_function", aws_sdk_tcl_lambda_GetFunctionCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awslambda", "0.1");
 }

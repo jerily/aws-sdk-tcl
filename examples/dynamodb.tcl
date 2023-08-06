@@ -3,7 +3,7 @@ load [file join $dir .. build src/aws-sdk-tcl-dynamodb libaws-sdk-tcl-dynamodb.s
 
 set table "MyTable"
 
-set config_dict [dict create profile localstack region us-east-1 endpoint "http://localhost:4566"]
+set config_dict [dict create region us-east-1 endpoint "http://localhost:4566"]
 set client [::aws::dynamodb::create $config_dict]
 
 puts tables_before=[$client list_tables]
