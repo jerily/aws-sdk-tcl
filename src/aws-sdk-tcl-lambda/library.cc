@@ -9,6 +9,8 @@
 #include <fstream>
 #include <aws/lambda/model/ListFunctionsRequest.h>
 #include <aws/lambda/model/GetFunctionRequest.h>
+#include <aws/lambda/model/CreateFunctionRequest.h>
+#include <aws/lambda/model/DeleteFunctionRequest.h>
 #include "library.h"
 
 #ifdef DEBUG
@@ -245,7 +247,7 @@ int aws_sdk_tcl_lambda_ListFunctions(Tcl_Interp *interp, const char *handle) {
 }
 
 int aws_sdk_tcl_lambda_GetFunction(Tcl_Interp *interp, const char *handle, const char *function_name) {
-    DBG(fprintf(stderr, "aws_sdk_tcl_lambda_ListFunctions: handle=%s function_name=%s\n", handle, function_name));
+    DBG(fprintf(stderr, "aws_sdk_tcl_lambda_GetFunction: handle=%s function_name=%s\n", handle, function_name));
     Aws::Lambda::LambdaClient *client = aws_sdk_tcl_lambda_GetInternalFromName(handle);
     if (!client) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
@@ -265,18 +267,93 @@ int aws_sdk_tcl_lambda_GetFunction(Tcl_Interp *interp, const char *handle, const
     }
 }
 
+int aws_sdk_tcl_lambda_CreateFunction(
+        Tcl_Interp *interp,
+        const char *handle,
+        const char *function_name,
+        const char *function_code_path,
+        const char *handler,
+        const char *runtime,
+        const char *execution_role_arn
+        ) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_lambda_CreateFunction: handle=%s function_name=%s\n", handle, function_name));
+    Aws::Lambda::LambdaClient *client = aws_sdk_tcl_lambda_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::Lambda::Model::CreateFunctionRequest request;
+    request.SetFunctionName(function_name);
+    request.SetHandler(handler);
+    request.SetRuntime(Aws::Lambda::Model::RuntimeMapper::GetRuntimeForName(runtime));
+    request.SetRole(execution_role_arn);
+
+    Aws::Lambda::Model::FunctionCode code;
+    std::ifstream ifstream(function_code_path,std::ios_base::in | std::ios_base::binary);
+    if (!ifstream.is_open()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("Error opening code file", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::StringStream buffer;
+    buffer << ifstream.rdbuf();
+
+    code.SetZipFile(Aws::Utils::ByteBuffer((unsigned char *) buffer.str().c_str(),
+                                           buffer.str().length()));
+    request.SetCode(code);
+
+    Aws::Lambda::Model::CreateFunctionOutcome outcome = client->CreateFunction(request);
+    if (outcome.IsSuccess()) {
+        return TCL_OK;
+    }
+    else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
+int aws_sdk_tcl_lambda_DeleteFunction(
+        Tcl_Interp *interp,
+        const char *handle,
+        const char *function_name
+) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_lambda_DeleteFunction: handle=%s function_name=%s\n", handle, function_name));
+    Aws::Lambda::LambdaClient *client = aws_sdk_tcl_lambda_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::Lambda::Model::DeleteFunctionRequest request;
+    request.SetFunctionName(function_name);
+    Aws::Lambda::Model::DeleteFunctionOutcome outcome = client->DeleteFunction(request);
+
+    if (outcome.IsSuccess()) {
+        return TCL_OK;
+    }
+    else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
 int aws_sdk_tcl_lambda_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
             "list_functions",
             "get_function",
+            "create_function",
+            "delete_function",
             nullptr
     };
 
     enum clientMethod {
         m_destroy,
         m_listFunctions,
-        m_getFunction
+        m_getFunction,
+        m_createFunction,
+        m_deleteFunction
     };
 
     if (objc < 2) {
@@ -302,6 +379,24 @@ int aws_sdk_tcl_lambda_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, i
             case m_getFunction:
                 CheckArgs(3, 3, 1, "get_function function_name");
                 return aws_sdk_tcl_lambda_GetFunction(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2])
+                );
+            case m_createFunction:
+                CheckArgs(7, 7, 1, "create_function function_name function_code_path handler runtime execution_role_arn");
+                return aws_sdk_tcl_lambda_CreateFunction(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        Tcl_GetString(objv[3]),
+                        Tcl_GetString(objv[4]),
+                        Tcl_GetString(objv[5]),
+                        Tcl_GetString(objv[6])
+                );
+            case m_deleteFunction:
+                CheckArgs(3, 3, 1, "delete_function function_name");
+                return aws_sdk_tcl_lambda_DeleteFunction(
                         interp,
                         handle,
                         Tcl_GetString(objv[2])
@@ -363,6 +458,30 @@ static int aws_sdk_tcl_lambda_GetFunctionCmd(ClientData clientData, Tcl_Interp *
     return aws_sdk_tcl_lambda_GetFunction(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
 }
 
+static int aws_sdk_tcl_lambda_CreateFunctionCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "CreateFunctionCmd\n"));
+    CheckArgs(7, 7, 1, "handle_name function_name function_code_path function_handler runtime execution_role_arn");
+    return aws_sdk_tcl_lambda_CreateFunction(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]),
+            Tcl_GetString(objv[3]),
+            Tcl_GetString(objv[4]),
+            Tcl_GetString(objv[5]),
+            Tcl_GetString(objv[6])
+            );
+}
+
+static int aws_sdk_tcl_lambda_DeleteFunctionCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "DeleteFunctionCmd\n"));
+    CheckArgs(3, 3, 1, "handle_name function_name");
+    return aws_sdk_tcl_lambda_DeleteFunction(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2])
+    );
+}
+
 static void aws_sdk_tcl_lambda_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_lambda_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_lambda_NameToInternal_HT);
@@ -395,6 +514,8 @@ int Aws_sdk_tcl_lambda_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::lambda::destroy", aws_sdk_tcl_lambda_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::lambda::list_functions", aws_sdk_tcl_lambda_ListFunctionsCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::lambda::get_function", aws_sdk_tcl_lambda_GetFunctionCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::lambda::create_function", aws_sdk_tcl_lambda_CreateFunctionCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::lambda::delete_function", aws_sdk_tcl_lambda_DeleteFunctionCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awslambda", "0.1");
 }
