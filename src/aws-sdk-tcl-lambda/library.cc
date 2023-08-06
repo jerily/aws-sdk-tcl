@@ -7,6 +7,7 @@
 #include <aws/lambda/LambdaClient.h>
 #include <cstdio>
 #include <fstream>
+#include <aws/lambda/model/ListFunctionsRequest.h>
 #include "library.h"
 
 #ifdef DEBUG
@@ -102,7 +103,38 @@ int aws_sdk_tcl_lambda_ListFunctions(Tcl_Interp *interp, const char *handle) {
         return TCL_ERROR;
     }
 
-    // TODO
+    Tcl_Obj *resultObj = Tcl_NewListObj(0, nullptr);
+    Aws::String marker;
+
+    do {
+        Aws::Lambda::Model::ListFunctionsRequest request;
+        if (!marker.empty()) {
+            request.SetMarker(marker);
+        }
+
+        Aws::Lambda::Model::ListFunctionsOutcome outcome = client->ListFunctions(
+                request);
+
+        if (outcome.IsSuccess()) {
+            const Aws::Lambda::Model::ListFunctionsResult &result = outcome.GetResult();
+//            std::cout << result.GetFunctions().size() << " lambda functions were retrieved." << std::endl;
+
+            for (const Aws::Lambda::Model::FunctionConfiguration &functionConfiguration: result.GetFunctions()) {
+                Tcl_ListObjAppendElement(interp, resultObj,
+                                         Tcl_NewStringObj(functionConfiguration.GetFunctionName().c_str(), -1));
+
+//                std::cout << functions.size() << "  " << functionConfiguration.GetDescription() << std::endl;
+//                std::cout << "   " << Aws::Lambda::Model::RuntimeMapper::GetNameForRuntime(functionConfiguration.GetRuntime()) << ": " << functionConfiguration.GetHandler() << std::endl;
+            }
+            marker = result.GetNextMarker();
+        }
+        else {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+            return TCL_ERROR;
+        }
+    } while (!marker.empty());
+
+    Tcl_SetObjResult(interp, resultObj);
     return TCL_OK;
 }
 
