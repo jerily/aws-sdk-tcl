@@ -5,3 +5,5 @@
     - creates a iam role
 * **::aws::iam::delete_role** *handle* *role_name*
     - deletes a iam role
+* **::aws::iam::list_policies** *handle*
+    - lists all policies

@@ -7,5 +7,6 @@ set config_dict [dict create region us-east-1 endpoint "http://localhost:4566"]
 set client [::aws::iam::create $config_dict]
 set iam_create_role_output [$client create_role lambda_exec {{"Version": "2012-10-17","Statement": [{ "Effect": "Allow", "Principal": {"Service": "lambda.amazonaws.com"}, "Action": "sts:AssumeRole"}]}}]
 puts iam_create_role_output=$iam_create_role_output
+puts iam_list_policies=[$client list_policies]
 $client delete_role lambda_exec
 $client destroy

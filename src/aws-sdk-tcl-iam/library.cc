@@ -7,6 +7,7 @@
 #include <aws/iam/IAMClient.h>
 #include <aws/iam/model/CreateRoleRequest.h>
 #include <aws/iam/model/DeleteRoleRequest.h>
+#include <aws/iam/model/ListPoliciesRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -31,6 +32,9 @@ static int aws_sdk_tcl_iam_ModuleInitialized;
 
 static char client_usage[] =
         "Usage iamClient <method> <args>, where method can be:\n"
+        "  create_role role_name policy\n"
+        "  delete_role role_name\n"
+        "  list_policies\n"
         ;
 
 
@@ -143,18 +147,65 @@ int aws_sdk_tcl_iam_DeleteRole(Tcl_Interp *interp, const char *handle, const cha
     }
 }
 
+int aws_sdk_tcl_iam_ListPolicies(Tcl_Interp *interp, const char *handle) {
+    Aws::IAM::IAMClient *client = aws_sdk_tcl_iam_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+    Aws::IAM::Model::ListPoliciesRequest request;
+
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, nullptr);
+    bool done = false;
+    while (!done) {
+        auto outcome = client->ListPolicies(request);
+        if (!outcome.IsSuccess()) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+            return TCL_ERROR;
+        }
+        const Aws::String DATE_FORMAT("%Y-%m-%d");
+        const auto &policies = outcome.GetResult().GetPolicies();
+        for (const auto &policy: policies) {
+            Tcl_Obj *dictPtr = Tcl_NewDictObj();
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("policy_name", -1), Tcl_NewStringObj(policy.GetPolicyName().c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("policy_id", -1), Tcl_NewStringObj(policy.GetPolicyId().c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("arn", -1), Tcl_NewStringObj(policy.GetArn().c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("description", -1), Tcl_NewStringObj(policy.GetDescription().c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("create_date", -1), Tcl_NewStringObj(policy.GetCreateDate().ToGmtString(DATE_FORMAT.c_str()).c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("update_date", -1), Tcl_NewStringObj(policy.GetUpdateDate().ToGmtString(DATE_FORMAT.c_str()).c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("attachment_count", -1), Tcl_NewIntObj(policy.GetAttachmentCount()));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("is_attachable", -1), Tcl_NewBooleanObj(policy.GetIsAttachable()));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("path", -1), Tcl_NewStringObj(policy.GetPath().c_str(), -1));
+            Tcl_DictObjPut(interp, dictPtr, Tcl_NewStringObj("default_version_id", -1), Tcl_NewStringObj(policy.GetDefaultVersionId().c_str(), -1));
+
+            Tcl_ListObjAppendElement(interp, listPtr, dictPtr);
+        }
+
+        if (outcome.GetResult().GetIsTruncated()) {
+            request.SetMarker(outcome.GetResult().GetMarker());
+        }
+        else {
+            done = true;
+        }
+    }
+    Tcl_SetObjResult(interp, listPtr);
+    return TCL_OK;
+}
+
 int aws_sdk_tcl_iam_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
             "create_role",
             "delete_role",
+            "list_policies",
             nullptr
     };
 
     enum clientMethod {
         m_destroy,
         m_createRole,
-        m_deleteRole
+        m_deleteRole,
+        m_listPolicies
     };
 
     if (objc < 2) {
@@ -177,6 +228,9 @@ int aws_sdk_tcl_iam_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
             case m_deleteRole:
                 CheckArgs(3, 3, 1, "create_role role_name");
                 return aws_sdk_tcl_iam_DeleteRole(interp, handle, Tcl_GetString(objv[2]));
+            case m_listPolicies:
+                CheckArgs(2, 2, 1, "list_policies");
+                return aws_sdk_tcl_iam_ListPolicies(interp, handle);
         }
     }
 
@@ -234,6 +288,12 @@ static int aws_sdk_tcl_iam_DeleteRoleCmd(ClientData clientData, Tcl_Interp *inte
     return aws_sdk_tcl_iam_DeleteRole(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
 }
 
+static int aws_sdk_tcl_iam_ListPoliciesCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "ListPoliciesCmd\n"));
+    CheckArgs(2, 2, 1, "handle");
+    return aws_sdk_tcl_iam_ListPolicies(interp, Tcl_GetString(objv[1]));
+}
+
 static void aws_sdk_tcl_iam_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_iam_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_iam_NameToInternal_HT);
@@ -266,6 +326,7 @@ int Aws_sdk_tcl_iam_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::iam::destroy", aws_sdk_tcl_iam_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::iam::create_role", aws_sdk_tcl_iam_CreateRoleCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::iam::delete_role", aws_sdk_tcl_iam_DeleteRoleCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::iam::list_policies", aws_sdk_tcl_iam_ListPoliciesCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awsiam", "0.1");
 }
