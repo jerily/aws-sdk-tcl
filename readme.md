@@ -8,6 +8,12 @@ TCL_AWS_DIR=$(pwd)
 ```
 
 ## Build Dependencies
+### AWS SDK C++ Dependencies
+```bash
+sudo apt-get install libcurl4-openssl-dev libssl-dev uuid-dev zlib1g-dev libpulse-dev
+```
+
+### AWS SDK C++ Build
 ```bash
 cd ${TCL_AWS_DIR}/aws-sdk-cpp
 mkdir build
