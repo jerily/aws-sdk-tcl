@@ -8,9 +8,17 @@ TCL_AWS_DIR=$(pwd)
 ```
 
 ## Build Dependencies
+
 ### AWS SDK C++ Dependencies
+
+To install the packages on Debian/Ubuntu-based systems:
 ```bash
 sudo apt-get install libcurl4-openssl-dev libssl-dev uuid-dev zlib1g-dev libpulse-dev
+```
+
+To install the packages on Amazon Linux/Redhat/Fedora/CentOS-based systems
+```bash
+sudo yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 ```
 
 ### AWS SDK C++ Build
