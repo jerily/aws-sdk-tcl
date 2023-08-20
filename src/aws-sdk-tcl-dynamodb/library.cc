@@ -226,42 +226,56 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
     }
 }
 
-Tcl_Obj* get_dict_obj_from_attribute_value(const Aws::DynamoDB::Model::AttributeValue& attribute_value);
+Tcl_Obj* get_typed_obj_from_attribute_value(Tcl_Interp *interp, const Aws::DynamoDB::Model::AttributeValue& attribute_value);
 
-Tcl_Obj* get_dict_obj_from_map(std::map<std::string, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> map_attr_value) {
+Tcl_Obj* get_typed_obj_from_map(Tcl_Interp *interp, std::map<std::string, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> map_attr_value) {
     Tcl_Obj *dictPtr = Tcl_NewDictObj();
     for (auto const& x : map_attr_value) {
         Tcl_Obj *keyPtr = Tcl_NewStringObj(x.first.c_str(), -1);
-        Tcl_Obj *valuePtr = get_dict_obj_from_attribute_value(*x.second);
-        Tcl_DictObjPut(NULL, dictPtr, keyPtr, valuePtr);
+        Tcl_Obj *valuePtr = get_typed_obj_from_attribute_value(interp, *x.second);
+        Tcl_DictObjPut(interp, dictPtr, keyPtr, valuePtr);
     }
     return dictPtr;
 }
 
-Tcl_Obj* get_dict_obj_from_list(std::vector<std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> list_attr_value) {
+Tcl_Obj* get_typed_obj_from_list(Tcl_Interp *interp, std::vector<std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> list_attr_value) {
     Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
     for (auto const& x : list_attr_value) {
-        Tcl_Obj *valuePtr = get_dict_obj_from_attribute_value(*x);
-        Tcl_ListObjAppendElement(NULL, listPtr, valuePtr);
+        Tcl_Obj *valuePtr = get_typed_obj_from_attribute_value(interp,*x);
+        Tcl_ListObjAppendElement(interp, listPtr, valuePtr);
     }
     return listPtr;
 }
 
-Tcl_Obj* get_dict_obj_from_attribute_value(const Aws::DynamoDB::Model::AttributeValue& attribute_value) {
+Tcl_Obj* get_typed_obj_from_attribute_value(Tcl_Interp *interp, const Aws::DynamoDB::Model::AttributeValue& attribute_value) {
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
     switch (attribute_value.GetType()) {
         case Aws::DynamoDB::Model::ValueType::NUMBER:
-            return Tcl_NewStringObj(attribute_value.GetN().c_str(), -1);
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("N", -1));
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj(attribute_value.GetN().c_str(), -1));
+            break;
         case Aws::DynamoDB::Model::ValueType::STRING:
-            return Tcl_NewStringObj(attribute_value.GetS().c_str(), -1);
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("S", -1));
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj(attribute_value.GetS().c_str(), -1));
+            break;
         case Aws::DynamoDB::Model::ValueType::BOOL:
-            return Tcl_NewBooleanObj(attribute_value.GetBool());
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("BOOL", -1));
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewBooleanObj(attribute_value.GetBool()));
+            break;
         case Aws::DynamoDB::Model::ValueType::ATTRIBUTE_MAP:
-            return get_dict_obj_from_map(attribute_value.GetM());
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("M", -1));
+            Tcl_ListObjAppendElement(interp, listPtr, get_typed_obj_from_map(interp, attribute_value.GetM()));
+            break;
         case Aws::DynamoDB::Model::ValueType::ATTRIBUTE_LIST:
-            return get_dict_obj_from_list(attribute_value.GetL());
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("L", -1));
+            Tcl_ListObjAppendElement(interp, listPtr, get_typed_obj_from_list(interp, attribute_value.GetL()));
+            break;
         default:
-            return Tcl_NewStringObj("__unknown__", -1);
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("__unknown__", -1));
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj("", -1));
+            break;
     }
+    return listPtr;
 }
 
 int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const char *tableName, Tcl_Obj *dictPtr) {
@@ -311,7 +325,7 @@ int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const c
             for (const auto &i: item) {
 //                std::cout << "Values: " << i.first << ": " << i.second.GetS()<< std::endl;
                 Tcl_DictObjPut(interp, result, Tcl_NewStringObj(i.first.c_str(), -1),
-                               get_dict_obj_from_attribute_value(i.second));
+                               get_typed_obj_from_attribute_value(interp, i.second));
             }
         }
         Tcl_SetObjResult(interp, result);
@@ -414,7 +428,7 @@ int aws_sdk_tcl_dynamodb_QueryItems(
                     for (const auto &i: item) {
 //                        std::cout << i.first << ": " << i.second.GetS() << std::endl;
                         Tcl_DictObjPut(interp, itemDictPtr, Tcl_NewStringObj(i.first.c_str(), -1),
-                                       get_dict_obj_from_attribute_value(i.second));
+                                       get_typed_obj_from_attribute_value(interp, i.second));
                         count++;
                     }
                     Tcl_ListObjAppendElement(interp, resultListPtr, itemDictPtr);
@@ -686,6 +700,105 @@ int aws_sdk_tcl_dynamodb_ListTables(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
+Tcl_Obj *get_simple_obj_from_typed(Tcl_Interp *interp, Tcl_Obj *spec);
+
+Tcl_Obj *get_simple_obj_from_typed_map(Tcl_Interp *interp, Tcl_Obj *attrValuePtr) {
+    Tcl_Obj *dictPtr = Tcl_NewDictObj();
+    Tcl_DictSearch search;
+    Tcl_Obj *key, *spec;
+    int done;
+    if (Tcl_DictObjFirst(interp, attrValuePtr, &search,
+                         &key, &spec, &done) != TCL_OK) {
+        return nullptr;
+    }
+    for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        int length;
+        Tcl_ListObjLength(interp, spec, &length);
+        if (length != 2) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
+            return nullptr;
+        }
+        Tcl_DictObjPut(interp, dictPtr, key, get_simple_obj_from_typed(interp, spec));
+    }
+    Tcl_DictObjDone(&search);
+    return dictPtr;
+}
+
+Tcl_Obj *get_simple_obj_from_typed_list(Tcl_Interp *interp, Tcl_Obj *attrValuePtr) {
+    Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
+    int length;
+    Tcl_ListObjLength(interp, attrValuePtr, &length);
+    for (int i = 0; i < length; i++) {
+        Tcl_Obj *valuePtr;
+        Tcl_ListObjIndex(interp, attrValuePtr, i, &valuePtr);
+        Tcl_ListObjAppendElement(interp, listPtr, get_simple_obj_from_typed(interp, valuePtr));
+    }
+    return listPtr;
+}
+
+Tcl_Obj *get_simple_obj_from_typed(Tcl_Interp *interp, Tcl_Obj *spec) {
+    Tcl_Obj *attrTypePtr;
+    Tcl_ListObjIndex(interp, spec, 0, &attrTypePtr);
+    Tcl_Obj *attrValuePtr;
+    Tcl_ListObjIndex(interp, spec, 1, &attrValuePtr);
+    int typeLength;
+    const char *type = Tcl_GetStringFromObj(attrTypePtr, &typeLength);
+    switch (type[0]) {
+        case 'S':
+            return Tcl_NewStringObj(Tcl_GetString(attrValuePtr), -1);
+        case 'N':
+            int intValue;
+            Tcl_GetIntFromObj(interp, attrValuePtr, &intValue);
+            return Tcl_NewIntObj(intValue);
+        case 'B':
+            if (typeLength == 4 && 0 == strcmp(type, "BOOL")) {
+                int flag;
+                Tcl_GetBooleanFromObj(interp, attrValuePtr, &flag);
+                return Tcl_NewBooleanObj(flag);
+            } else {
+                int bytelen;
+                const unsigned char *bytes = Tcl_GetByteArrayFromObj(attrValuePtr, &bytelen);
+                return Tcl_NewByteArrayObj(bytes, bytelen);
+            }
+        case 'M':
+            return get_simple_obj_from_typed_map(interp, attrValuePtr);
+        case 'L':
+            return get_simple_obj_from_typed_list(interp, attrValuePtr);
+        default:
+            return nullptr;
+    }
+
+}
+
+int aws_sdk_tcl_dynamodb_TypedItemToSimple(Tcl_Interp *interp, Tcl_Obj *dictPtr) {
+    Tcl_Obj *resultDictPtr = Tcl_NewDictObj();
+    Tcl_DictSearch search;
+    Tcl_Obj *key, *spec;
+    int done;
+    if (Tcl_DictObjFirst(interp, dictPtr, &search,
+                         &key, &spec, &done) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
+        int length;
+        Tcl_ListObjLength(interp, spec, &length);
+        if (length != 2) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
+            return TCL_ERROR;
+        }
+        Tcl_Obj *valuePtr = get_simple_obj_from_typed(interp, spec);
+        if (valuePtr == nullptr) {
+            Tcl_DictObjDone(&search);
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
+            return TCL_ERROR;
+        }
+        Tcl_DictObjPut(interp, resultDictPtr, key, valuePtr);
+    }
+    Tcl_DictObjDone(&search);
+    Tcl_SetObjResult(interp, resultDictPtr);
+    return TCL_OK;
+}
+
 int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -876,6 +989,12 @@ static int aws_sdk_tcl_dynamodb_ListTablesCmd(ClientData clientData, Tcl_Interp 
     return aws_sdk_tcl_dynamodb_ListTables(interp, Tcl_GetString(objv[1]));
 }
 
+static int aws_sdk_tcl_dynamodb_TypedItemToSimpleCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "TypedItemToSimpleCmd\n"));
+    CheckArgs(2, 2, 1, "item_dict");
+    return aws_sdk_tcl_dynamodb_TypedItemToSimple(interp, objv[1]);
+}
+
 static void aws_sdk_tcl_dynamodb_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_dynamodb_NameToInternal_HT);
@@ -912,6 +1031,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::create_table", aws_sdk_tcl_dynamodb_CreateTableCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::delete_table", aws_sdk_tcl_dynamodb_DeleteTableCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::list_tables", aws_sdk_tcl_dynamodb_ListTablesCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::dynamodb::typed_item_to_simple", aws_sdk_tcl_dynamodb_TypedItemToSimpleCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awsdynamodb", "0.1");
 }

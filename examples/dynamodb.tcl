@@ -8,6 +8,7 @@ set table "MyTable"
 set config_dict [dict create region us-east-1 endpoint "http://localhost:4566"]
 set client [::aws::dynamodb::create $config_dict]
 
+$client delete_table $table
 puts tables_before=[$client list_tables]
 $client create_table $table [dict create id [list N HASH]]
 puts tables_after=[$client list_tables]
@@ -24,14 +25,16 @@ set item_dict [dict create \
         zip [list N 98101] \
     ]] \
 ]
-puts $item_dict
+
+puts item_dict,typed=$item_dict
+puts item_dict,simple=[::aws::dynamodb::typed_item_to_simple $item_dict]
 $client put_item $table $item_dict
 
 $client put_item $table [dict create id [list N 2] name [list S "test2"]]
 
 set key_dict [dict create id [list N "1"]]
 set item [$client get_item $table $key_dict]
-puts item=$item
+puts item,typed=$item
 
 $client delete_table $table
 

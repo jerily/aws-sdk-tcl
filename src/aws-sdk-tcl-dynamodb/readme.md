@@ -15,3 +15,5 @@
     - returns a list of tables
 * **::aws::dynamodb::destroy** *handle*
     - destroys a DynamoDB client
+* **::aws::dynamodb::typed_item_to_simple** *typed_item*
+    - converts a typed item to a simple item (TCL dict)
