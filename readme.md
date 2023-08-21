@@ -62,6 +62,7 @@ LS_LOG=trace localstack start
 tclsh ${TCL_AWS_DIR}/examples/s3.tcl
 tclsh ${TCL_AWS_DIR}/examples/dynamodb.tcl
 tclsh ${TCL_AWS_DIR}/examples/lambda.tcl
+tclsh ${TCL_AWS_DIR}/examples/sqs.tcl
 tclsh ${TCL_AWS_DIR}/examples/iam.tcl
 ```
 
@@ -70,4 +71,5 @@ tclsh ${TCL_AWS_DIR}/examples/iam.tcl
 * [TCL S3](./src/aws-sdk-tcl-s3/)
 * [TCL DynamoDB](./src/aws-sdk-tcl-dynamodb/)
 * [TCL Lambda](./src/aws-sdk-tcl-lambda/)
+* [TCL SQS](./src/aws-sdk-tcl-sqs/)
 * [TCL IAM](./src/aws-sdk-tcl-iam/)
