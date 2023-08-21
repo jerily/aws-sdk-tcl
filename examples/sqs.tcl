@@ -8,6 +8,10 @@ set queue_url1 [$client create_queue MyQueue1]
 set queue_url2 [$client create_queue MyQueue2]
 puts queue_url1=$queue_url1
 puts queue_url2=$queue_url2
+$client send_message $queue_url1 "Hello World"
+$client send_message $queue_url1 "This is a test"
+puts received_messages=[$client receive_messages $queue_url1 10]
+
 foreach queue_url [$client list_queues] {
     puts "deleting... $queue_url"
     $client delete_queue $queue_url
