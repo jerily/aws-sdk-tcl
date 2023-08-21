@@ -342,6 +342,7 @@ int aws_sdk_tcl_dynamodb_QueryItems(
         const char *handle,
         const char *tableName,
         Tcl_Obj *dictPtr,
+        Tcl_Obj *projectionExpressionPtr,
         Tcl_Obj *scanForwardPtr,
         Tcl_Obj *limitPtr,
         Tcl_Obj *indexNamePtr
@@ -357,6 +358,13 @@ int aws_sdk_tcl_dynamodb_QueryItems(
 
     Aws::DynamoDB::Model::QueryRequest request;
     request.SetTableName(tableName);
+    if (projectionExpressionPtr) {
+        int projectionExpressionLength;
+        const char *projectionExpression = Tcl_GetStringFromObj(projectionExpressionPtr, &projectionExpressionLength);
+        if (projectionExpressionLength > 0) {
+            request.SetProjectionExpression(projectionExpression);
+        }
+    }
     if (scanForwardPtr) {
         int scanForward;
         Tcl_GetBooleanFromObj(interp, scanForwardPtr, &scanForward);
@@ -898,7 +906,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         objv[3]
                 );
             case m_queryItems:
-                CheckArgs(4, 7, 1, "get_item table query_dict ?scan_forward? ?limit? ?index_name?");
+                CheckArgs(4, 8, 1, "get_item table query_dict ?projection_expression? ?scan_forward? ?limit? ?index_name?");
                 return aws_sdk_tcl_dynamodb_QueryItems(
                         interp,
                         handle,
@@ -906,7 +914,8 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         objv[3],
                         objc > 4 ? objv[4] : nullptr,
                         objc > 5 ? objv[5] : nullptr,
-                        objc > 6 ? objv[6] : nullptr
+                        objc > 6 ? objv[6] : nullptr,
+                        objc > 7 ? objv[7] : nullptr
                 );
             case m_scan:
                 CheckArgs(3, 4, 1, "scan table ?projection_expression?");
@@ -1002,7 +1011,7 @@ static int aws_sdk_tcl_dynamodb_GetItemCmd(ClientData clientData, Tcl_Interp *in
 
 static int aws_sdk_tcl_dynamodb_QueryItemsCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "QueryItemsCmd\n"));
-    CheckArgs(4, 7, 1, "handle_name table query_dict ?scan_forward? ?limit? ?index_name?");
+    CheckArgs(4, 8, 1, "handle_name table query_dict ?projection_expression? ?scan_forward? ?limit? ?index_name?");
     return aws_sdk_tcl_dynamodb_QueryItems(
             interp,
             Tcl_GetString(objv[1]),
@@ -1010,7 +1019,8 @@ static int aws_sdk_tcl_dynamodb_QueryItemsCmd(ClientData clientData, Tcl_Interp 
             objv[3],
             objc > 4 ? objv[4] : nullptr,
             objc > 5 ? objv[5] : nullptr,
-            objc > 6 ? objv[6] : nullptr
+            objc > 6 ? objv[6] : nullptr,
+            objc > 7 ? objv[7] : nullptr
     );
 }
 

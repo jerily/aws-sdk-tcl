@@ -47,9 +47,10 @@ $client put_item NewTable [dict create id [list N 2] ts [list N 1234567895]]
 $client put_item NewTable [dict create id [list N 2] ts [list N 1234567896]]
 
 puts query_items_1=[$client query NewTable [dict create id [list N 1]]]
-puts query_items_1_backward=[$client query NewTable [dict create id [list N 1]] false]
-puts query_items_1_backward_limit_2=[$client query NewTable [dict create id [list N 1]] false 2]
-puts query_items_2=[$client query NewTable [dict create id [list N 2]] true 2]
+puts query_items_1,with_proj_expr=[$client query NewTable [dict create id [list N 1]] "id"]
+puts query_items_1_backward=[$client query NewTable [dict create id [list N 1]] "" false]
+puts query_items_1_backward_limit_2=[$client query NewTable [dict create id [list N 1]] "" false 2]
+puts query_items_2=[$client query NewTable [dict create id [list N 2]] "" true 2]
 puts query_items_id_and_timestamp=[$client query NewTable [dict create id [list N 1] ts [list N 1234567890]]]
 puts scan_table_with_proj_expr,typed=[$client scan NewTable id]
 puts scan_table,typed=[$client scan NewTable]
@@ -70,7 +71,7 @@ $client put_item $gsi_table [dict create id [list S "4"] otherId [list S "d"]]
 $client put_item $gsi_table [dict create id [list S "5"] otherId [list S "e"]]
 
 puts gsi_query_items_id_2=[$client query $gsi_table [dict create id [list S "2"]]]
-puts gsi_query_items_otherid_c=[$client query $gsi_table [dict create otherId [list S "c"]] true 1 MyTableByOtherId]
+puts gsi_query_items_otherid_c=[$client query $gsi_table [dict create otherId [list S "c"]] "" true 1 MyTableByOtherId]
 $client delete_table $gsi_table
 
 $client destroy
