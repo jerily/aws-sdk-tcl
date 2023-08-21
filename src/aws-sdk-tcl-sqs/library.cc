@@ -32,6 +32,9 @@ static int           aws_sdk_tcl_sqs_ModuleInitialized;
 
 static char client_usage[] =
     "Usage sqsClient <method> <args>, where method can be:\n"
+    "  destroy\n"
+    "  create_queue queue_name\n"
+    "  delete_queue queue_url\n"
 ;
 
 
