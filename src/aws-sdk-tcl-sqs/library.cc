@@ -8,6 +8,7 @@
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/CreateQueueRequest.h>
 #include <aws/sqs/model/DeleteQueueRequest.h>
+#include <aws/sqs/model/ListQueuesRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -137,19 +138,44 @@ int aws_sdk_tcl_sqs_DeleteQueue(Tcl_Interp *interp, const char *handle, const ch
     }
 }
 
+int aws_sdk_tcl_sqs_ListQueues(Tcl_Interp *interp, const char *handle) {
+    Aws::SQS::SQSClient *client = aws_sdk_tcl_sqs_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+    Aws::SQS::Model::ListQueuesRequest request;
+
+    auto outcome = client->ListQueues(request);
+    if (outcome.IsSuccess()) {
+        Tcl_Obj *listPtr = Tcl_NewListObj(0, nullptr);
+        const auto &queue_urls = outcome.GetResult().GetQueueUrls();
+        for (const auto &iter: queue_urls) {
+            Tcl_ListObjAppendElement(interp, listPtr, Tcl_NewStringObj(iter.c_str(), -1));
+        }
+        Tcl_SetObjResult(interp, listPtr);
+        return TCL_OK;
+    } else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
 
 int aws_sdk_tcl_sqs_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
             "create_queue",
             "delete_queue",
+            "list_queues",
             nullptr
     };
 
     enum clientMethod {
         m_destroy,
         m_createQueue,
-        m_deleteQueue
+        m_deleteQueue,
+        m_listQueues
     };
 
     if (objc < 2) {
@@ -184,6 +210,10 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int
                         handle,
                         Tcl_GetString(objv[2])
                 );
+            case m_listQueues:
+                DBG(fprintf(stderr, "ListQueuesMethod\n"));
+                CheckArgs(2,2,1,"list_queues");
+                return aws_sdk_tcl_sqs_ListQueues(interp, handle);
         }
     }
 
@@ -249,6 +279,12 @@ static int aws_sdk_tcl_sqs_DeleteQueueCmd(ClientData  clientData, Tcl_Interp *in
     );
 }
 
+static int aws_sdk_tcl_sqs_ListQueuesCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "ListQueuesCmd\n"));
+    CheckArgs(2,2,1,"handle");
+    return aws_sdk_tcl_sqs_ListQueues(interp, Tcl_GetString(objv[1]));
+}
+
 static void aws_sdk_tcl_sqs_ExitHandler(ClientData unused)
 {
     Tcl_MutexLock(&aws_sdk_tcl_sqs_NameToInternal_HT_Mutex);
@@ -282,6 +318,7 @@ int Aws_sdk_tcl_sqs_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::sqs::destroy", aws_sdk_tcl_sqs_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::create_queue", aws_sdk_tcl_sqs_CreateQueueCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::delete_queue", aws_sdk_tcl_sqs_DeleteQueueCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::sqs::list_queues", aws_sdk_tcl_sqs_ListQueuesCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awssqs", "0.1");
 }
