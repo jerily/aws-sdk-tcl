@@ -43,6 +43,7 @@ static char dynamodb_client_usage[] =
         "  create_table table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?     \n"
         "  delete_table table                                                                                   \n"
         "  list_tables                                                                                          \n"
+        "  destroy\n"
         ;
 
 

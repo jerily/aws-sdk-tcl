@@ -40,6 +40,7 @@ static char lambda_client_usage[] =
         "   create_function function_name function_code_path handler runtime execution_role_arn ?timeout?\n"
         "   invoke_function function_name payload_json ?invocation_type?\n"
         "   delete_function function_name\n"
+        "   destroy\n"
         ;
 
 

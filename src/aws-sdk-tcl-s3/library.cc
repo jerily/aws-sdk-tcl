@@ -52,6 +52,7 @@ static char s3_client_usage[] =
     "   delete_bucket bucket            \n"
     "   exists_bucket bucket            \n"
     "   list_buckets                    \n"
+    "   destroy                         \n"
 ;
 
 

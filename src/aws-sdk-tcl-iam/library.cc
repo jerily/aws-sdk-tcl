@@ -36,6 +36,7 @@ static char client_usage[] =
         "  create_role role_name policy\n"
         "  delete_role role_name\n"
         "  list_policies\n"
+        "  destroy\n"
         ;
 
 
