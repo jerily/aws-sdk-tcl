@@ -8,7 +8,6 @@ set table "MyTable"
 set config_dict [dict create region us-east-1 endpoint "http://localhost:4566"]
 set client [::aws::dynamodb::create $config_dict]
 
-$client delete_table $table
 puts tables_before=[$client list_tables]
 $client create_table $table [dict create id [list N HASH]]
 puts tables_after=[$client list_tables]
@@ -52,6 +51,8 @@ puts query_items_1_backward=[$client query NewTable [dict create id [list N 1]] 
 puts query_items_1_backward_limit_2=[$client query NewTable [dict create id [list N 1]] false 2]
 puts query_items_2=[$client query NewTable [dict create id [list N 2]] true 2]
 puts query_items_id_and_timestamp=[$client query NewTable [dict create id [list N 1] ts [list N 1234567890]]]
+puts scan_table,typed=[$client scan NewTable]
+puts scan_table,simple=[lmap x [$client scan NewTable] {::aws::dynamodb::typed_item_to_simple $x}]
 $client delete_table NewTable
 
 # global secondary indexes
