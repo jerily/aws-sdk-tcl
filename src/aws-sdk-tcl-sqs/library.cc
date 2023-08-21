@@ -6,6 +6,8 @@
 #include <iostream>
 #include <aws/core/Aws.h>
 #include <aws/sqs/SQSClient.h>
+#include <aws/sqs/model/CreateQueueRequest.h>
+#include <aws/sqs/model/DeleteQueueRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -95,14 +97,56 @@ int aws_sdk_tcl_sqs_Destroy(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
+int aws_sdk_tcl_sqs_CreateQueue(Tcl_Interp *interp, const char *handle, const char *queue_name) {
+    Aws::SQS::SQSClient *client = aws_sdk_tcl_sqs_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+    Aws::SQS::Model::CreateQueueRequest request;
+    request.SetQueueName(queue_name);
+    auto outcome = client->CreateQueue(request);
+    if (outcome.IsSuccess()) {
+        auto queueUrl = outcome.GetResult().GetQueueUrl();
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(queueUrl.c_str(), -1));
+        return TCL_OK;
+    } else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
+int aws_sdk_tcl_sqs_DeleteQueue(Tcl_Interp *interp, const char *handle, const char *queue_url) {
+    Aws::SQS::SQSClient *client = aws_sdk_tcl_sqs_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+    Aws::SQS::Model::DeleteQueueRequest request;
+    request.SetQueueUrl(queue_url);
+    auto outcome = client->DeleteQueue(request);
+    if (outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewBooleanObj(1));
+        return TCL_OK;
+    } else {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+}
+
+
 int aws_sdk_tcl_sqs_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
+            "create_queue",
+            "delete_queue",
             nullptr
     };
 
     enum clientMethod {
-        m_destroy
+        m_destroy,
+        m_createQueue,
+        m_deleteQueue
     };
 
     if (objc < 2) {
@@ -121,6 +165,22 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int
                 DBG(fprintf(stderr, "DestroyMethod\n"));
                 CheckArgs(2,2,1,"destroy");
                 return aws_sdk_tcl_sqs_Destroy(interp, handle);
+            case m_createQueue:
+                DBG(fprintf(stderr, "CreateQueueMethod\n"));
+                CheckArgs(3,3,1,"create_queue queue_name");
+                return aws_sdk_tcl_sqs_CreateQueue(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2])
+                );
+            case m_deleteQueue:
+                DBG(fprintf(stderr, "DeleteQueueMethod\n"));
+                CheckArgs(3,3,1,"delete_queue queue_url");
+                return aws_sdk_tcl_sqs_DeleteQueue(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2])
+                );
         }
     }
 
@@ -166,6 +226,26 @@ static int aws_sdk_tcl_sqs_DestroyCmd(ClientData  clientData, Tcl_Interp *interp
     return aws_sdk_tcl_sqs_Destroy(interp, Tcl_GetString(objv[1]));
 }
 
+static int aws_sdk_tcl_sqs_CreateQueueCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "CreateQueueCmd\n"));
+    CheckArgs(3,3,1,"handle queue_name");
+    return aws_sdk_tcl_sqs_CreateQueue(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2])
+    );
+}
+
+static int aws_sdk_tcl_sqs_DeleteQueueCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "DeleteQueueCmd\n"));
+    CheckArgs(3,3,1,"handle queue_url");
+    return aws_sdk_tcl_sqs_DeleteQueue(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2])
+    );
+}
+
 static void aws_sdk_tcl_sqs_ExitHandler(ClientData unused)
 {
     Tcl_MutexLock(&aws_sdk_tcl_sqs_NameToInternal_HT_Mutex);
@@ -197,6 +277,8 @@ int Aws_sdk_tcl_sqs_Init(Tcl_Interp *interp) {
     Tcl_CreateNamespace(interp, "::aws::sqs", nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::create", aws_sdk_tcl_sqs_CreateCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::destroy", aws_sdk_tcl_sqs_DestroyCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::sqs::create_queue", aws_sdk_tcl_sqs_CreateQueueCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::sqs::delete_queue", aws_sdk_tcl_sqs_DeleteQueueCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awssqs", "0.1");
 }
