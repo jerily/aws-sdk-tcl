@@ -50,6 +50,15 @@ make install
 cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-dynamodb
 make
 make install
+cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-lambda
+make
+make install
+cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-sqs
+make
+make install
+cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-iam
+make
+make install
 ```
 
 ## Try out the examples
