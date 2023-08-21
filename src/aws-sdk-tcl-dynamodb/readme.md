@@ -7,7 +7,7 @@
     - gets an item from a table
 * **::aws::dynamodb::query_items** *handle table query_dict ?scan_forward? ?limit? ?index_name?*
   - queries items from a table
-* **::aws::dynamodb::scan** *handle table ?projection_expression_dict?*
+* **::aws::dynamodb::scan** *handle table ?projection_expression?*
   - scans items from a table
 * **::aws::dynamodb::create_table** *handle table key_schema_dict ?provisioned_throughput_dict? ?global_secondary_indexes_list?*
     - creates a table

@@ -474,10 +474,10 @@ int aws_sdk_tcl_dynamodb_Scan(
         Tcl_Interp *interp,
         const char *handle,
         const char *tableName,
-        Tcl_Obj *projectionExpressionDictPtr
+        Tcl_Obj *projectionExpressionPtr
 ) {
     DBG(fprintf(stderr, "aws_sdk_tcl_dynamodb_Scan: handle=%s tableName=%s projection_expression_dict=%s\n", handle, tableName,
-                Tcl_GetString(projectionExpressionDictPtr)));
+                Tcl_GetString(projectionExpressionPtr)));
     Aws::DynamoDB::DynamoDBClient *client = aws_sdk_tcl_dynamodb_GetInternalFromName(handle);
     if (!client) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
@@ -488,8 +488,8 @@ int aws_sdk_tcl_dynamodb_Scan(
     request.SetTableName(tableName);
 
 
-//    if (!projectionExpression.empty())
-//        request.SetProjectionExpression(projectionExpression);
+    if (projectionExpressionPtr)
+        request.SetProjectionExpression(Tcl_GetString(projectionExpressionPtr));
 
     // Perform scan on table.
     const Aws::DynamoDB::Model::ScanOutcome &outcome = client->Scan(request);
@@ -909,7 +909,7 @@ int aws_sdk_tcl_dynamodb_ClientObjCmd(ClientData clientData, Tcl_Interp *interp,
                         objc > 6 ? objv[6] : nullptr
                 );
             case m_scan:
-                CheckArgs(3, 4, 1, "scan table ?projection_expression_dict?");
+                CheckArgs(3, 4, 1, "scan table ?projection_expression?");
                 return aws_sdk_tcl_dynamodb_Scan(
                         interp,
                         handle,
