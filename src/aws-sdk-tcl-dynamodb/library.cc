@@ -17,6 +17,9 @@
 #include <fstream>
 #include "library.h"
 
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
 #ifdef DEBUG
 # define DBG(x) x
 #else
@@ -1106,7 +1109,7 @@ int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::list_tables", aws_sdk_tcl_dynamodb_ListTablesCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::dynamodb::typed_item_to_simple", aws_sdk_tcl_dynamodb_TypedItemToSimpleCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "awsdynamodb", "0.1");
+    return Tcl_PkgProvide(interp, "awsdynamodb", XSTR(VERSION));
 }
 
 #ifdef USE_NAVISERVER

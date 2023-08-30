@@ -13,6 +13,9 @@
 #include <fstream>
 #include "library.h"
 
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
 #ifdef DEBUG
 # define DBG(x) x
 #else
@@ -330,7 +333,7 @@ int Aws_sdk_tcl_iam_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::iam::delete_role", aws_sdk_tcl_iam_DeleteRoleCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::iam::list_policies", aws_sdk_tcl_iam_ListPoliciesCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "awsiam", "0.1");
+    return Tcl_PkgProvide(interp, "awsiam", XSTR(VERSION));
 }
 
 #ifdef USE_NAVISERVER

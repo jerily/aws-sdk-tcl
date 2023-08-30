@@ -15,6 +15,9 @@
 #include <aws/lambda/model/InvokeRequest.h>
 #include "library.h"
 
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
 #ifdef DEBUG
 # define DBG(x) x
 #else
@@ -597,7 +600,7 @@ int Aws_sdk_tcl_lambda_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::lambda::delete_function", aws_sdk_tcl_lambda_DeleteFunctionCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::lambda::invoke_function", aws_sdk_tcl_lambda_InvokeFunctionCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "awslambda", "0.1");
+    return Tcl_PkgProvide(interp, "awslambda", XSTR(VERSION));
 }
 
 #ifdef USE_NAVISERVER

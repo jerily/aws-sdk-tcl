@@ -15,6 +15,9 @@
 #include <fstream>
 #include "library.h"
 
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
 #ifdef DEBUG
 # define DBG(x) x
 #else
@@ -426,7 +429,7 @@ int Aws_sdk_tcl_sqs_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::sqs::send_message", aws_sdk_tcl_sqs_SendMessageCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::receive_messages", aws_sdk_tcl_sqs_ReceiveMessagesCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "awssqs", "0.1");
+    return Tcl_PkgProvide(interp, "awssqs", XSTR(VERSION));
 }
 
 #ifdef USE_NAVISERVER

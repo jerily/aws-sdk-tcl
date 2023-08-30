@@ -21,6 +21,9 @@
 #include <aws/s3/model/DeleteObjectsRequest.h>
 #include "library.h"
 
+#define XSTR(s) STR(s)
+#define STR(s) #s
+
 #ifdef DEBUG
 # define DBG(x) x
 #else
@@ -745,7 +748,7 @@ int Aws_sdk_tcl_s3_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::s3::exists_bucket", aws_sdk_tcl_s3_ExistsBucketCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::list_buckets", aws_sdk_tcl_s3_ListBucketsCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "awss3", "0.1");
+    return Tcl_PkgProvide(interp, "awss3", XSTR(VERSION));
 }
 
 #ifdef USE_NAVISERVER
