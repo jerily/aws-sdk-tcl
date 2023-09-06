@@ -1,11 +1,6 @@
 # aws-sdk-tcl
 
-## Clone the repository
-```bash
-git clone --depth 1 --recurse-submodules --shallow-submodules https://github.com/jerily/aws-sdk-tcl.git
-cd aws-sdk-tcl
-TCL_AWS_DIR=$(pwd)
-```
+TCL bindings for the AWS SDK C++. Use them in TCL or NaviServer as loadable modules.
 
 ## Build Dependencies
 
@@ -23,7 +18,8 @@ sudo yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 
 ### AWS SDK C++ Build
 ```bash
-cd ${TCL_AWS_DIR}/aws-sdk-cpp
+git clone --depth 1 --branch 1.11.157 --recurse-submodules --shallow-submodules https://github.com/aws/aws-sdk-cpp
+cd aws-sdk-cpp
 mkdir build
 cd build
 cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm"
@@ -31,18 +27,26 @@ cmake --build . --config=Release
 cmake --install . --config=Release
 ```
 
-## Build
-For TCL:
+## Build TCL AWS SDK
+
+### Download the latest release
+```bash
+wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.0.tar.gz
+tar -xzf v1.0.0.tar.gz
+export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.0
+```
+
+### Build for TCL:
 ```bash
 cd ${TCL_AWS_DIR}
 mkdir build
 cd build
-cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release
+cmake ..
 make
 make install
 ```
 
-For NaviServer:
+### Build for NaviServer:
 ```bash
 cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-s3
 make
@@ -59,6 +63,9 @@ make install
 cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-iam
 make
 make install
+cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-ssm
+make
+make install
 ```
 
 ## Try out the examples
@@ -73,6 +80,7 @@ tclsh ${TCL_AWS_DIR}/examples/dynamodb.tcl
 tclsh ${TCL_AWS_DIR}/examples/lambda.tcl
 tclsh ${TCL_AWS_DIR}/examples/sqs.tcl
 tclsh ${TCL_AWS_DIR}/examples/iam.tcl
+tclsh ${TCL_AWS_DIR}/examples/ssm.tcl
 ```
 
 ## Documentation
@@ -82,3 +90,4 @@ tclsh ${TCL_AWS_DIR}/examples/iam.tcl
 * [TCL Lambda](./src/aws-sdk-tcl-lambda/)
 * [TCL SQS](./src/aws-sdk-tcl-sqs/)
 * [TCL IAM](./src/aws-sdk-tcl-iam/)
+* [TCL SSM](./src/aws-sdk-tcl-ssm/)
