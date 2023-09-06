@@ -6,6 +6,7 @@
 #include <iostream>
 #include <aws/core/Aws.h>
 #include <aws/ssm/SSMClient.h>
+#include <aws/ssm/model/PutParameterRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -100,15 +101,52 @@ int aws_sdk_tcl_ssm_Destroy(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
+int aws_sdk_tcl_ssm_PutParameter(Tcl_Interp *interp, const char *handle, const char *name, const char *value, Tcl_Obj *type) {
+    Aws::SSM::SSMClient *client = aws_sdk_tcl_ssm_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::SSM::Model::PutParameterRequest request;
+    request.SetName(name);
+    request.SetValue(value);
+
+    if (type) {
+        int type_length;
+        const char *typeStr = Tcl_GetStringFromObj(type, &type_length);
+        if (type_length == 6 && strcmp(typeStr, "String") == 0) {
+            request.SetType(Aws::SSM::Model::ParameterType::String);
+        } else if (type_length == 10 && strcmp(typeStr, "StringList") == 0) {
+            request.SetType(Aws::SSM::Model::ParameterType::StringList);
+        } else if (type_length == 12 && strcmp(typeStr, "SecureString") == 0) {
+            request.SetType(Aws::SSM::Model::ParameterType::SecureString);
+        } else {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid type", -1));
+            return TCL_ERROR;
+        }
+    }
+
+    auto outcome = client->PutParameter(request);
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    return TCL_OK;
+}
+
 
 int aws_sdk_tcl_ssm_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
+            "put_parameter",
             nullptr
     };
 
     enum clientMethod {
         m_destroy,
+        m_putParameter,
     };
 
     if (objc < 2) {
@@ -125,6 +163,13 @@ int aws_sdk_tcl_ssm_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
         switch ((enum clientMethod) methodIndex) {
             case m_destroy:
                 return aws_sdk_tcl_ssm_Destroy(interp, handle);
+            case m_putParameter:
+                return aws_sdk_tcl_ssm_PutParameter(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        Tcl_GetString(objv[3]),
+                        objc == 5 ? objv[4]: nullptr);
         }
     }
 
@@ -170,6 +215,18 @@ static int aws_sdk_tcl_ssm_DestroyCmd(ClientData clientData, Tcl_Interp *interp,
     return aws_sdk_tcl_ssm_Destroy(interp, Tcl_GetString(objv[1]));
 }
 
+static int aws_sdk_tcl_ssm_PutParameterCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "PutParameterCmd\n"));
+    CheckArgs(4, 5, 1, "handle name value ?type?");
+    return aws_sdk_tcl_ssm_PutParameter(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]),
+            Tcl_GetString(objv[3]),
+            objc == 5 ? objv[4]: nullptr
+            );
+}
+
 static void aws_sdk_tcl_ssm_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_ssm_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_ssm_NameToInternal_HT);
@@ -200,6 +257,7 @@ int Aws_sdk_tcl_ssm_Init(Tcl_Interp *interp) {
     Tcl_CreateNamespace(interp, "::aws::ssm", nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::ssm::create", aws_sdk_tcl_ssm_CreateCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::ssm::destroy", aws_sdk_tcl_ssm_DestroyCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::ssm::put_parameter", aws_sdk_tcl_ssm_PutParameterCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awsssm", XSTR(VERSION));
 }
