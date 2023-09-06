@@ -5,6 +5,7 @@
  */
 #include <iostream>
 #include <aws/core/Aws.h>
+#include <aws/ssm/model/PatchFilterKey.h>
 #include <aws/ssm/SSMClient.h>
 #include <aws/ssm/model/PutParameterRequest.h>
 #include <aws/ssm/model/GetParameterRequest.h>
@@ -299,7 +300,7 @@ int Aws_sdk_tcl_ssm_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::ssm::put_parameter", aws_sdk_tcl_ssm_PutParameterCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::ssm::get_parameter", aws_sdk_tcl_ssm_GetParameterCmd, nullptr, nullptr);
 
-    return Tcl_PkgProvide(interp, "awsssm", XSTR(VERSION));
+    return Tcl_PkgProvide(interp, "awsssm", XSTR(PROJECT_VERSION));
 }
 
 #ifdef USE_NAVISERVER
