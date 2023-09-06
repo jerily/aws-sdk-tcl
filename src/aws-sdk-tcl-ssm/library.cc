@@ -5,10 +5,10 @@
  */
 #include <iostream>
 #include <aws/core/Aws.h>
-#include <aws/ssm/model/PatchFilterKey.h>
 #include <aws/ssm/SSMClient.h>
 #include <aws/ssm/model/PutParameterRequest.h>
 #include <aws/ssm/model/GetParameterRequest.h>
+#include <aws/ssm/model/DeleteParameterRequest.h>
 #include <cstdio>
 #include <fstream>
 #include "library.h"
@@ -37,6 +37,9 @@ static int aws_sdk_tcl_ssm_ModuleInitialized;
 static char client_usage[] =
         "Usage ssmClient <method> <args>, where method can be:\n"
         "  destroy\n"
+        "  put_parameter name value ?type?\n"
+        "  get_parameter name\n"
+        "  delete_parameter name\n"
         ;
 
 
@@ -159,19 +162,39 @@ int aws_sdk_tcl_ssm_GetParameter(Tcl_Interp *interp, const char *handle, const c
     return TCL_OK;
 }
 
+int aws_sdk_tcl_ssm_DeleteParameter(Tcl_Interp *interp, const char *handle, const char *name) {
+    Aws::SSM::SSMClient *client = aws_sdk_tcl_ssm_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::SSM::Model::DeleteParameterRequest request;
+    request.SetName(name);
+
+    auto outcome = client->DeleteParameter(request);
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+    return TCL_OK;
+}
+
 
 int aws_sdk_tcl_ssm_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
             "put_parameter",
             "get_parameter",
+            "delete_parameter",
             nullptr
     };
 
     enum clientMethod {
         m_destroy,
         m_putParameter,
-        m_getParameter
+        m_getParameter,
+        m_deleteParameter
     };
 
     if (objc < 2) {
@@ -197,6 +220,11 @@ int aws_sdk_tcl_ssm_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
                         objc == 5 ? objv[4]: nullptr);
             case m_getParameter:
                 return aws_sdk_tcl_ssm_GetParameter(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]));
+            case m_deleteParameter:
+                return aws_sdk_tcl_ssm_DeleteParameter(
                         interp,
                         handle,
                         Tcl_GetString(objv[2]));
@@ -267,6 +295,16 @@ static int aws_sdk_tcl_ssm_GetParameterCmd(ClientData clientData, Tcl_Interp *in
     );
 }
 
+static int aws_sdk_tcl_ssm_DeleteParameterCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    DBG(fprintf(stderr, "DeleteParameterCmd\n"));
+    CheckArgs(3, 3, 1, "handle name");
+    return aws_sdk_tcl_ssm_DeleteParameter(
+            interp,
+            Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2])
+    );
+}
+
 static void aws_sdk_tcl_ssm_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_ssm_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_ssm_NameToInternal_HT);
@@ -299,6 +337,7 @@ int Aws_sdk_tcl_ssm_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::ssm::destroy", aws_sdk_tcl_ssm_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::ssm::put_parameter", aws_sdk_tcl_ssm_PutParameterCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::ssm::get_parameter", aws_sdk_tcl_ssm_GetParameterCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::ssm::delete_parameter", aws_sdk_tcl_ssm_DeleteParameterCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awsssm", XSTR(PROJECT_VERSION));
 }
