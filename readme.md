@@ -26,7 +26,7 @@ sudo yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 cd ${TCL_AWS_DIR}/aws-sdk-cpp
 mkdir build
 cd build
-cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts"
+cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm"
 cmake --build . --config=Release
 cmake --install . --config=Release
 ```
