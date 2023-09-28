@@ -10,7 +10,7 @@ set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
-
+set(TOPLEVEL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 add_subdirectory(src/aws-sdk-tcl-s3)
 add_subdirectory(src/aws-sdk-tcl-dynamodb)
 add_subdirectory(src/aws-sdk-tcl-lambda)
