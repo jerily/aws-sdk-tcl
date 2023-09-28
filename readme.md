@@ -26,7 +26,12 @@ git clone --depth 1 --branch 1.11.157 --recurse-submodules --shallow-submodules 
 cd aws-sdk-cpp
 mkdir build
 cd build
-cmake .. -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm"
+cmake .. \
+  -DBUILD_SHARED_LIBS=ON \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm" \
+  -DENABLE_TESTING=OFF \
+  -DAUTORUN_UNIT_TESTS=OFF
 cmake --build . --config=Release
 cmake --install . --config=Release
 ```

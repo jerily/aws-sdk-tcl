@@ -16,8 +16,10 @@ find_package(TCL EXACT 8.6.13 REQUIRED)  # TCL_INCLUDE_PATH TCL_LIBRARY
 set(CMAKE_CXX_FLAGS "-DTCL_THREADS -DVERSION=${PROJECT_VERSION} ${CMAKE_CXX_FLAGS}")
 
 add_library(aws-sdk-tcl-sqs SHARED library.cc)
-set_target_properties(aws-sdk-tcl-sqs PROPERTIES POSITION_INDEPENDENT_CODE ON)
-
+set_target_properties(aws-sdk-tcl-sqs
+        PROPERTIES POSITION_INDEPENDENT_CODE ON
+        INSTALL_RPATH_USE_LINK_PATH ON
+)
 include_directories(${AWS_SDK_CPP_DIR}/include/aws/sqs ${TCL_INCLUDE_PATH})
 target_link_directories(${PROJECT_NAME} PRIVATE ${AWS_SDK_CPP_DIR}/lib)
 target_link_libraries(aws-sdk-tcl-sqs PRIVATE aws-cpp-sdk-core aws-cpp-sdk-sqs ${TCL_LIBRARY})
