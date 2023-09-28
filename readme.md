@@ -31,9 +31,9 @@ cmake --install . --config=Release
 
 ### Download the latest release
 ```bash
-wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.0.tar.gz
-tar -xzf v1.0.0.tar.gz
-export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.0
+wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.1.tar.gz
+tar -xzf v1.0.1.tar.gz
+export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.1
 ```
 
 ### Build for TCL:
@@ -41,7 +41,11 @@ export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.0
 cd ${TCL_AWS_DIR}
 mkdir build
 cd build
-cmake ..
+# change "TCL_LIBRARY_DIR" and "TCL_INCLUDE_DIR" to the correct paths
+cmake .. \
+  -DTCL_LIBRARY_DIR=/usr/local/lib \
+  -DTCL_INCLUDE_DIR=/usr/local/include \
+  -DAWS_SDK_CPP_DIR=/usr/local
 make
 make install
 ```
@@ -75,12 +79,12 @@ Install [localstack](https://docs.localstack.cloud/getting-started/installation/
 LS_LOG=trace localstack start
 # Depending on your setup you may need to set LD_LIBRARY_PATH
 # export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-tclsh ${TCL_AWS_DIR}/examples/s3.tcl
-tclsh ${TCL_AWS_DIR}/examples/dynamodb.tcl
-tclsh ${TCL_AWS_DIR}/examples/lambda.tcl
-tclsh ${TCL_AWS_DIR}/examples/sqs.tcl
-tclsh ${TCL_AWS_DIR}/examples/iam.tcl
-tclsh ${TCL_AWS_DIR}/examples/ssm.tcl
+tclsh8.6 ${TCL_AWS_DIR}/examples/s3.tcl
+tclsh8.6 ${TCL_AWS_DIR}/examples/dynamodb.tcl
+tclsh8.6 ${TCL_AWS_DIR}/examples/lambda.tcl
+tclsh8.6 ${TCL_AWS_DIR}/examples/sqs.tcl
+tclsh8.6 ${TCL_AWS_DIR}/examples/iam.tcl
+tclsh8.6 ${TCL_AWS_DIR}/examples/ssm.tcl
 ```
 
 ## Documentation

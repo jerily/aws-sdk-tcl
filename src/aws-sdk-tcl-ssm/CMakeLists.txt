@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl-ssm VERSION 1.0.0 LANGUAGES CXX C)
+project(aws-sdk-tcl-ssm VERSION 1.0.1 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(TARGET ${PROJECT_NAME})
@@ -8,7 +8,9 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED true)
 set(CMAKE_C_STANDARD_REQUIRED true)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
-find_package(Threads REQUIRED)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+find_package(TCL EXACT 8.6.13 REQUIRED)  # TCL_INCLUDE_PATH TCL_LIBRARY
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 set(CMAKE_CXX_FLAGS "-DTCL_THREADS -DPROJECT_VERSION=${PROJECT_VERSION} ${CMAKE_CXX_FLAGS}")
@@ -16,8 +18,8 @@ set(CMAKE_CXX_FLAGS "-DTCL_THREADS -DPROJECT_VERSION=${PROJECT_VERSION} ${CMAKE_
 add_library(${PROJECT_NAME} MODULE library.cc)
 set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-include_directories(aws/ssm ${TCL_INCLUDE_PATH})
-link_directories(aws/ssm)
+include_directories(${AWS_SDK_CPP_DIR}/include/aws/ssm ${TCL_INCLUDE_PATH})
+link_directories(${AWS_SDK_CPP_DIR}/lib ${AWS_SDK_CPP_DIR}/lib/aws/ssm)
 target_link_libraries(aws-sdk-tcl-ssm PRIVATE aws-cpp-sdk-core aws-cpp-sdk-ssm ${TCL_LIBRARY})
 get_filename_component(TCL_LIBRARY_PATH "${TCL_LIBRARY}" PATH)
 

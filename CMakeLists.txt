@@ -11,8 +11,6 @@ find_package(Threads REQUIRED)
 
 #set(CMAKE_VERBOSE_MAKEFILE ON)
 
-include(${CMAKE_CURRENT_LIST_DIR}/FindTCL.cmake)
-
 add_subdirectory(src/aws-sdk-tcl-s3)
 add_subdirectory(src/aws-sdk-tcl-dynamodb)
 add_subdirectory(src/aws-sdk-tcl-lambda)
