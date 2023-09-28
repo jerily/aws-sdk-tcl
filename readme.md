@@ -18,6 +18,7 @@ sudo yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 
 To install the packages on MacOS:
 ```bash
+brew install openssl@3
 ```
 
 ### AWS SDK C++ Build
