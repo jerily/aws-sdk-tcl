@@ -16,6 +16,10 @@ To install the packages on Amazon Linux/Redhat/Fedora/CentOS-based systems
 sudo yum install libcurl-devel openssl-devel libuuid-devel pulseaudio-libs-devel
 ```
 
+To install the packages on MacOS:
+```bash
+```
+
 ### AWS SDK C++ Build
 ```bash
 git clone --depth 1 --branch 1.11.157 --recurse-submodules --shallow-submodules https://github.com/aws/aws-sdk-cpp
