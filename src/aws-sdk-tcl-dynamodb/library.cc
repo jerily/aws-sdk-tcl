@@ -17,6 +17,14 @@
 #include <fstream>
 #include "library.h"
 
+#ifndef TCL_SIZE_MAX
+typedef int Tcl_Size;
+# define Tcl_GetSizeIntFromObj Tcl_GetIntFromObj
+# define Tcl_NewSizeIntObj Tcl_NewIntObj
+# define TCL_SIZE_MAX      INT_MAX
+# define TCL_SIZE_MODIFIER ""
+#endif
+
 #define XSTR(s) STR(s)
 #define STR(s) #s
 
@@ -117,7 +125,7 @@ std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value(Tcl_In
 
 std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value_to_list(Tcl_Interp *interp, Tcl_Obj *listPtr) {
     std::vector<std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> list_attr_value;
-    int length;
+    Tcl_Size length;
     Tcl_ListObjLength(interp, listPtr, &length);
     DBG(fprintf(stderr, "set_attribute_value_to_list, length: %d\n", length));
     for (int i = 0; i < length; i++) {
@@ -132,7 +140,7 @@ std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value_to_lis
 
 std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value_to_map(Tcl_Interp *interp, Tcl_Obj *listPtr) {
     std::map<std::string, const std::shared_ptr<Aws::DynamoDB::Model::AttributeValue>> map_attr_value;
-    int length;
+    Tcl_Size length;
     Tcl_ListObjLength(interp, listPtr, &length);
     DBG(fprintf(stderr, "set_attribute_value_to_map, length: %d\n", length));
     for (int i = 0; i < length; i+=2) {
@@ -157,7 +165,7 @@ std::shared_ptr<Aws::DynamoDB::Model::AttributeValue> set_attribute_value(Tcl_In
     Tcl_Obj *typePtr, *valuePtr;
     Tcl_ListObjIndex(interp, listPtr, 0, &typePtr);
     Tcl_ListObjIndex(interp, listPtr, 1, &valuePtr);
-    int typeLength;
+    Tcl_Size typeLength;
     const char *type = Tcl_GetStringFromObj(typePtr, &typeLength);
     switch(type[0]) {
         case 'S':
@@ -202,7 +210,7 @@ int aws_sdk_tcl_dynamodb_PutItem(Tcl_Interp *interp, const char *handle, const c
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
-        int length;
+        Tcl_Size length;
         Tcl_ListObjLength(interp, spec, &length);
         if (length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
@@ -303,7 +311,7 @@ int aws_sdk_tcl_dynamodb_GetItem(Tcl_Interp *interp, const char *handle, const c
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
-        int length;
+        Tcl_Size length;
         Tcl_ListObjLength(interp, spec, &length);
         if (length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
@@ -363,7 +371,7 @@ int aws_sdk_tcl_dynamodb_QueryItems(
     Aws::DynamoDB::Model::QueryRequest request;
     request.SetTableName(tableName);
     if (projectionExpressionPtr) {
-        int projectionExpressionLength;
+        Tcl_Size projectionExpressionLength;
         const char *projectionExpression = Tcl_GetStringFromObj(projectionExpressionPtr, &projectionExpressionLength);
         if (projectionExpressionLength > 0) {
             request.SetProjectionExpression(projectionExpression);
@@ -394,7 +402,7 @@ int aws_sdk_tcl_dynamodb_QueryItems(
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
-        int length;
+        Tcl_Size length;
         Tcl_ListObjLength(interp, spec, &length);
         if (length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
@@ -555,7 +563,7 @@ int aws_sdk_tcl_dynamodb_CreateTable(
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
-        int length;
+        Tcl_Size length;
         Tcl_ListObjLength(interp, spec, &length);
         if (length != 1 && length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid key schema definition", -1));
@@ -584,7 +592,7 @@ int aws_sdk_tcl_dynamodb_CreateTable(
     // Provisioned or On-Demand
     Aws::DynamoDB::Model::BillingMode billingMode = Aws::DynamoDB::Model::BillingMode::PAY_PER_REQUEST;
     if (provisionedThroughputDictPtr) {
-        int dictSize;
+        Tcl_Size dictSize;
         if (TCL_ERROR == Tcl_DictObjSize(interp, provisionedThroughputDictPtr, &dictSize)) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid provisionedThroughput definition", -1));
             return TCL_ERROR;
@@ -613,7 +621,7 @@ int aws_sdk_tcl_dynamodb_CreateTable(
     request.SetBillingMode(billingMode);
 
     if (globalSecondaryIndexesListPtr) {
-        int listSize;
+        Tcl_Size listSize;
         if (TCL_ERROR == Tcl_ListObjLength(interp, globalSecondaryIndexesListPtr, &listSize)) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid globalSecondaryIndexes definition, must be list of dicts", -1));
             return TCL_ERROR;
@@ -623,7 +631,7 @@ int aws_sdk_tcl_dynamodb_CreateTable(
             for (int i = 0; i < listSize; i++) {
                 Tcl_Obj *globalSecondaryIndexDictPtr;
                 Tcl_ListObjIndex(interp, globalSecondaryIndexesListPtr, i, &globalSecondaryIndexDictPtr);
-                int dictSize;
+                Tcl_Size dictSize;
                 if (TCL_ERROR == Tcl_DictObjSize(interp, globalSecondaryIndexDictPtr, &dictSize)) {
                     Tcl_SetObjResult(interp,
                                      Tcl_NewStringObj("Invalid globalSecondaryIndex definition, must be dict", -1));
@@ -653,7 +661,7 @@ int aws_sdk_tcl_dynamodb_CreateTable(
                     globalSecondaryIndex.SetIndexName(indexName);
 
                     // KeySchema
-                    int keySchemaLength;
+                    Tcl_Size keySchemaLength;
                     Tcl_ListObjLength(interp, keySchemaPtr, &keySchemaLength);
                     if (keySchemaLength == 0) {
                         Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid globalSecondaryIndexes definition", -1));
@@ -664,7 +672,7 @@ int aws_sdk_tcl_dynamodb_CreateTable(
                     for (int j = 0; j < keySchemaLength; j++) {
                         Tcl_Obj *keySchemaObjPtr;
                         Tcl_ListObjIndex(interp, keySchemaPtr, j, &keySchemaObjPtr);
-                        int keySchemaObjLength;
+                        Tcl_Size keySchemaObjLength;
                         Tcl_ListObjLength(interp, keySchemaObjPtr, &keySchemaObjLength);
                         if (keySchemaObjLength != 2) {
                             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid globalSecondaryIndex definition, key schema element is a pair of the name of the key and its type", -1));
@@ -764,7 +772,7 @@ Tcl_Obj *get_simple_obj_from_typed_map(Tcl_Interp *interp, Tcl_Obj *attrValuePtr
         return nullptr;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
-        int length;
+        Tcl_Size length;
         Tcl_ListObjLength(interp, spec, &length);
         if (length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
@@ -778,7 +786,7 @@ Tcl_Obj *get_simple_obj_from_typed_map(Tcl_Interp *interp, Tcl_Obj *attrValuePtr
 
 Tcl_Obj *get_simple_obj_from_typed_list(Tcl_Interp *interp, Tcl_Obj *attrValuePtr) {
     Tcl_Obj *listPtr = Tcl_NewListObj(0, NULL);
-    int length;
+    Tcl_Size length;
     Tcl_ListObjLength(interp, attrValuePtr, &length);
     for (int i = 0; i < length; i++) {
         Tcl_Obj *valuePtr;
@@ -793,7 +801,7 @@ Tcl_Obj *get_simple_obj_from_typed(Tcl_Interp *interp, Tcl_Obj *spec) {
     Tcl_ListObjIndex(interp, spec, 0, &attrTypePtr);
     Tcl_Obj *attrValuePtr;
     Tcl_ListObjIndex(interp, spec, 1, &attrValuePtr);
-    int typeLength;
+    Tcl_Size typeLength;
     const char *type = Tcl_GetStringFromObj(attrTypePtr, &typeLength);
     switch (type[0]) {
         case 'S':
@@ -808,7 +816,7 @@ Tcl_Obj *get_simple_obj_from_typed(Tcl_Interp *interp, Tcl_Obj *spec) {
                 Tcl_GetBooleanFromObj(interp, attrValuePtr, &flag);
                 return Tcl_NewBooleanObj(flag);
             } else {
-                int bytelen;
+                Tcl_Size bytelen;
                 const unsigned char *bytes = Tcl_GetByteArrayFromObj(attrValuePtr, &bytelen);
                 return Tcl_NewByteArrayObj(bytes, bytelen);
             }
@@ -832,7 +840,7 @@ int aws_sdk_tcl_dynamodb_TypedItemToSimple(Tcl_Interp *interp, Tcl_Obj *dictPtr)
         return TCL_ERROR;
     }
     for (; !done; Tcl_DictObjNext(&search, &key, &spec, &done)) {
-        int length;
+        Tcl_Size length;
         Tcl_ListObjLength(interp, spec, &length);
         if (length != 2) {
             Tcl_SetObjResult(interp, Tcl_NewStringObj("Invalid attribute value", -1));
@@ -1091,7 +1099,12 @@ void aws_sdk_tcl_dynamodb_InitModule() {
 }
 
 int Aws_sdk_tcl_dynamodb_Init(Tcl_Interp *interp) {
-    if (Tcl_InitStubs(interp, "8.6", 0) == nullptr) {
+
+    int major, minor, patchLevel, type;
+    Tcl_GetVersion(&major, &minor, &patchLevel, &type);
+
+    const char *version = major == 9 ? "9.0" : "8.6";
+    if (Tcl_InitStubs(interp, version, 0) == nullptr) {
         return TCL_ERROR;
     }
 

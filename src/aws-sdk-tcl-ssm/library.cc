@@ -13,6 +13,14 @@
 #include <fstream>
 #include "library.h"
 
+#ifndef TCL_SIZE_MAX
+typedef int Tcl_Size;
+# define Tcl_GetSizeIntFromObj Tcl_GetIntFromObj
+# define Tcl_NewSizeIntObj Tcl_NewIntObj
+# define TCL_SIZE_MAX      INT_MAX
+# define TCL_SIZE_MODIFIER ""
+#endif
+
 #define XSTR(s) STR(s)
 #define STR(s) #s
 
@@ -118,7 +126,7 @@ int aws_sdk_tcl_ssm_PutParameter(Tcl_Interp *interp, const char *handle, const c
     request.SetValue(value);
 
     if (type) {
-        int type_length;
+        Tcl_Size type_length;
         const char *typeStr = Tcl_GetStringFromObj(type, &type_length);
         if (type_length == 6 && strcmp(typeStr, "String") == 0) {
             request.SetType(Aws::SSM::Model::ParameterType::String);
@@ -326,7 +334,12 @@ void aws_sdk_tcl_ssm_InitModule() {
 }
 
 int Aws_sdk_tcl_ssm_Init(Tcl_Interp *interp) {
-    if (Tcl_InitStubs(interp, "8.6", 0) == nullptr) {
+
+    int major, minor, patchLevel, type;
+    Tcl_GetVersion(&major, &minor, &patchLevel, &type);
+
+    const char *version = major == 9 ? "9.0" : "8.6";
+    if (Tcl_InitStubs(interp, version, 0) == nullptr) {
         return TCL_ERROR;
     }
 

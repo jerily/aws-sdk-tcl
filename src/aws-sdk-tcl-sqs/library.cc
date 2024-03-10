@@ -20,6 +20,14 @@
 #include <fstream>
 #include "library.h"
 
+#ifndef TCL_SIZE_MAX
+typedef int Tcl_Size;
+# define Tcl_GetSizeIntFromObj Tcl_GetIntFromObj
+# define Tcl_NewSizeIntObj Tcl_NewIntObj
+# define TCL_SIZE_MAX      INT_MAX
+# define TCL_SIZE_MODIFIER ""
+#endif
+
 #define XSTR(s) STR(s)
 #define STR(s) #s
 
@@ -411,7 +419,7 @@ static int aws_sdk_tcl_sqs_DeleteMessageBatch(
     Aws::SQS::Model::DeleteMessageBatchRequest request;
     request.SetQueueUrl(queue_url);
 
-    int length;
+    Tcl_Size length;
     if (TCL_OK != Tcl_ListObjLength(interp, messageReceiptHandlesPtr, &length)) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("messageReceiptHandles must be a list", -1));
         return TCL_ERROR;
@@ -777,7 +785,12 @@ void aws_sdk_tcl_sqs_InitModule() {
 }
 
 int Aws_sdk_tcl_sqs_Init(Tcl_Interp *interp) {
-    if (Tcl_InitStubs(interp, "8.6", 0) == nullptr) {
+
+    int major, minor, patchLevel, type;
+    Tcl_GetVersion(&major, &minor, &patchLevel, &type);
+
+    const char *version = major == 9 ? "9.0" : "8.6";
+    if (Tcl_InitStubs(interp, version, 0) == nullptr) {
         return TCL_ERROR;
     }
 
