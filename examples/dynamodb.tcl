@@ -6,7 +6,7 @@ set dir [file dirname [dict get [info frame 0] file]]
 set table "MyTable"
 
 set config_dict [dict create region us-east-1 endpoint "http://localhost:4566"]
-set client [::aws::dynamodb::create $config_dict]
+::aws::dynamodb::create $config_dict client
 
 puts tables_before=[$client list_tables]
 $client create_table $table [dict create id [list N HASH]]
@@ -74,4 +74,5 @@ puts gsi_query_items_id_2=[$client query $gsi_table [dict create id [list S "2"]
 puts gsi_query_items_otherid_c=[$client query $gsi_table [dict create otherId [list S "c"]] "" true 1 MyTableByOtherId]
 $client delete_table $gsi_table
 
-$client destroy
+# client is destroyed via trace var, otherwise:
+# $client destroy

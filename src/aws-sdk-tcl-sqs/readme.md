@@ -2,6 +2,11 @@
 
 * **::aws::sqs::create** *config_dict*
   - returns a handle to an SQS client
+  - *config_dict* is a dictionary with the following keys:
+    - *region* - the region name
+    - *aws_access_key_id* - the access key id
+    - *aws_secret_access_key* - the secret access key
+    - *aws_session_token* - the session token
 * **::aws::sqs::destroy** *handle*
   - destroys an SQS client
 * **::aws::sqs::create_queue** *handle* *queue_name*

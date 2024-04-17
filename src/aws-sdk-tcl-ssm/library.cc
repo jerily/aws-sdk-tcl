@@ -1,10 +1,12 @@
 /**
  * Copyright Jerily LTD. All Rights Reserved.
- * SPDX-FileCopyrightText: 2023 Neofytos Dimitriou (neo@jerily.cy)
+ * SPDX-FileCopyrightText: 2024 Neofytos Dimitriou (neo@jerily.cy)
  * SPDX-License-Identifier: MIT.
  */
 #include <iostream>
 #include <aws/core/Aws.h>
+#include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/ssm/SSMClient.h>
 #include <aws/ssm/model/PutParameterRequest.h>
 #include <aws/ssm/model/GetParameterRequest.h>
@@ -12,6 +14,7 @@
 #include <cstdio>
 #include <fstream>
 #include "library.h"
+#include "../common/common.h"
 
 #ifndef TCL_SIZE_MAX
 typedef int Tcl_Size;
@@ -37,6 +40,15 @@ typedef int Tcl_Size;
                  }
 
 #define CMD_NAME(s, internal) std::sprintf((s), "_AWS_SSM_%p", (internal))
+
+static char VAR_READ_ONLY_MSG[] = "var is read-only";
+
+typedef struct {
+    Tcl_Interp *interp;
+    char *handle;
+    char *varname;
+    Aws::SSM::SSMClient *item;
+} aws_sdk_tcl_ssm_trace_t;
 
 static Tcl_HashTable aws_sdk_tcl_ssm_NameToInternal_HT;
 static Tcl_Mutex aws_sdk_tcl_ssm_NameToInternal_HT_Mutex;
@@ -243,24 +255,50 @@ int aws_sdk_tcl_ssm_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
     return TCL_ERROR;
 }
 
+char *aws_sdk_tcl_ssm_VarTraceProc(ClientData clientData, Tcl_Interp *interp, const char *name1, const char *name2, int flags) {
+    auto *trace = (aws_sdk_tcl_ssm_trace_t *) clientData;
+    if (trace->item == nullptr) {
+        DBG(fprintf(stderr, "VarTraceProc: client has been deleted\n"));
+        if (!Tcl_InterpDeleted(trace->interp)) {
+            Tcl_UntraceVar(trace->interp, trace->varname, TCL_TRACE_WRITES|TCL_TRACE_UNSETS,
+                           (Tcl_VarTraceProc*) aws_sdk_tcl_ssm_VarTraceProc,
+                           (ClientData) clientData);
+        }
+        Tcl_Free((char *) trace->varname);
+        Tcl_Free((char *) trace->handle);
+        Tcl_Free((char *) trace);
+        return nullptr;
+    }
+    if (flags & TCL_TRACE_WRITES) {
+        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_WRITES\n"));
+        Tcl_SetVar2(trace->interp, name1, name2, trace->handle, TCL_LEAVE_ERR_MSG);
+        return VAR_READ_ONLY_MSG;
+    }
+    if (flags & TCL_TRACE_UNSETS) {
+        fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n");
+        aws_sdk_tcl_ssm_Destroy(trace->interp, trace->handle);
+        Tcl_Free((char *) trace->varname);
+        Tcl_Free((char *) trace->handle);
+        Tcl_Free((char *) trace);
+    }
+    return nullptr;
+}
+
 static int aws_sdk_tcl_ssm_CreateCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "CreateCmd\n"));
 
-    CheckArgs(2, 2, 1, "config_dict");
+    CheckArgs(2, 3, 1, "config_dict ?varname?");
 
-    Aws::Client::ClientConfiguration clientConfig;
-    Tcl_Obj *region;
-    Tcl_Obj *endpoint;
-    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("region", -1), &region);
-    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("endpoint", -1), &endpoint);
-    if (region) {
-        clientConfig.region = Tcl_GetString(region);
+    auto result = get_client_config_and_credentials_provider(interp, objv[1]);
+    int status = std::get<0>(result);
+    if (TCL_OK != status) {
+        SetResult("Invalid config_dict");
+        return TCL_ERROR;
     }
-    if (endpoint) {
-        clientConfig.endpointOverride = Tcl_GetString(endpoint);
-    }
+    Aws::Client::ClientConfiguration client_config = std::get<1>(result);
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_provider_ptr = std::get<2>(result);
 
-    auto *client = new Aws::SSM::SSMClient(clientConfig);
+    auto *client = credentials_provider_ptr != nullptr ? new Aws::SSM::SSMClient(credentials_provider_ptr, client_config) : new Aws::SSM::SSMClient(client_config);
     char handle[80];
     CMD_NAME(handle, client);
     aws_sdk_tcl_ssm_RegisterName(handle, client);
@@ -270,6 +308,21 @@ static int aws_sdk_tcl_ssm_CreateCmd(ClientData clientData, Tcl_Interp *interp, 
                          nullptr,
                          nullptr);
 //                                 (Tcl_CmdDeleteProc*) aws_sdk_tcl_ssm_clientObjCmdDeleteProc);
+
+
+    if (objc == 3) {
+        auto *trace = (aws_sdk_tcl_ssm_trace_t *) Tcl_Alloc(sizeof(aws_sdk_tcl_ssm_trace_t));
+        trace->interp = interp;
+        trace->varname = aws_sdk_strndup(Tcl_GetString(objv[2]), 80);
+        trace->handle = aws_sdk_strndup(handle, 80);
+        trace->item = client;
+        const char *objVar = Tcl_GetString(objv[2]);
+        Tcl_UnsetVar(interp, objVar, 0);
+        Tcl_SetVar  (interp, objVar, handle, 0);
+        Tcl_TraceVar(interp,objVar,TCL_TRACE_WRITES|TCL_TRACE_UNSETS,
+                     (Tcl_VarTraceProc*) aws_sdk_tcl_ssm_VarTraceProc,
+                     (ClientData) trace);
+    }
 
     Tcl_SetObjResult(interp, Tcl_NewStringObj(handle, -1));
     return TCL_OK;

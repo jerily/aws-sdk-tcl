@@ -7,7 +7,7 @@ set bucket_name "my-bucket"
 
 set config_dict [dict create endpoint "http://s3.localhost.localstack.cloud:4566"]
 #set config_dict [dict create]
-set s3_client [::aws::s3::create $config_dict]
+::aws::s3::create $config_dict s3_client
 
 puts exists_bucket_before=[$s3_client exists_bucket $bucket_name]
 $s3_client create_bucket $bucket_name
@@ -72,5 +72,5 @@ for {set i 0} {$i < 3} {incr i} {
 puts buckets_after_delete=[$s3_client list_buckets]
 
 
-#::aws::s3::destroy $s3_client
-$s3_client destroy
+# ::aws::s3::destroy $s3_client
+# $s3_client destroy

@@ -1,10 +1,12 @@
 /**
  * Copyright Jerily LTD. All Rights Reserved.
- * SPDX-FileCopyrightText: 2023 Neofytos Dimitriou (neo@jerily.cy)
+ * SPDX-FileCopyrightText: 2024 Neofytos Dimitriou (neo@jerily.cy)
  * SPDX-License-Identifier: MIT.
  */
 #include <iostream>
 #include <aws/core/Aws.h>
+#include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/CreateQueueRequest.h>
 #include <aws/sqs/model/DeleteQueueRequest.h>
@@ -19,6 +21,7 @@
 #include <cstdio>
 #include <fstream>
 #include "library.h"
+#include "../common/common.h"
 
 #ifndef TCL_SIZE_MAX
 typedef int Tcl_Size;
@@ -45,9 +48,18 @@ typedef int Tcl_Size;
 
 #define CMD_NAME(s, internal) std::sprintf((s), "_AWS_S3_%p", (internal))
 
+static char VAR_READ_ONLY_MSG[] = "var is read-only";
+
 static Tcl_HashTable aws_sdk_tcl_sqs_NameToInternal_HT;
 static Tcl_Mutex aws_sdk_tcl_sqs_NameToInternal_HT_Mutex;
 static int aws_sdk_tcl_sqs_ModuleInitialized;
+
+typedef struct {
+    Tcl_Interp *interp;
+    char *handle;
+    char *varname;
+    Aws::SQS::SQSClient *item;
+} aws_sdk_tcl_sqs_trace_t;
 
 static char client_usage[] =
         "Usage sqsClient <method> <args>, where method can be:\n"
@@ -262,10 +274,14 @@ static int aws_sdk_tcl_sqs_SetQueueAttributes(Tcl_Interp *interp, const char *ha
     // delivery of all messages in the queue is delayed.
     // Valid values: An  integer from 0 to 900 (15 minutes). Default: 0.
     Tcl_Obj *delaySecondsPtr;
-    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, Tcl_NewStringObj("DelaySeconds", -1), &delaySecondsPtr)) {
+    Tcl_Obj *delay_seconds_key_ptr = Tcl_NewStringObj("DelaySeconds", -1);
+    Tcl_IncrRefCount(delay_seconds_key_ptr);
+    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, delay_seconds_key_ptr, &delaySecondsPtr)) {
+        Tcl_DecrRefCount(delay_seconds_key_ptr);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("error reading attributes_dict", -1));
         return TCL_ERROR;
     }
+    Tcl_DecrRefCount(delay_seconds_key_ptr);
     if (delaySecondsPtr) {
         request.AddAttributes(Aws::SQS::Model::QueueAttributeName::DelaySeconds,
                               Tcl_GetString(delaySecondsPtr));
@@ -275,10 +291,14 @@ static int aws_sdk_tcl_sqs_SetQueueAttributes(Tcl_Interp *interp, const char *ha
     // contain before Amazon SQS rejects it. Valid values: An  integer  from
     // 1,024  bytes  (1  KiB)  up  to  262,144  bytes (256 KiB). Default: 262,144 (256 KiB).
     Tcl_Obj *maximumMessageSizePtr;
-    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, Tcl_NewStringObj("MaximumMessageSize", -1), &maximumMessageSizePtr)) {
+    Tcl_Obj *maximum_message_size_key_ptr = Tcl_NewStringObj("MaximumMessageSize", -1);
+    Tcl_IncrRefCount(maximum_message_size_key_ptr);
+    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, maximum_message_size_key_ptr, &maximumMessageSizePtr)) {
+        Tcl_DecrRefCount(maximum_message_size_key_ptr);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("error reading attributes dict", -1));
         return TCL_ERROR;
     }
+    Tcl_DecrRefCount(maximum_message_size_key_ptr);
     if (maximumMessageSizePtr) {
         request.AddAttributes(Aws::SQS::Model::QueueAttributeName::MaximumMessageSize,
                               Tcl_GetString(maximumMessageSizePtr));
@@ -288,11 +308,15 @@ static int aws_sdk_tcl_sqs_SetQueueAttributes(Tcl_Interp *interp, const char *ha
     // Amazon  SQS retains a message. Valid values: An integer representing
     // seconds, from 60 (1 minute) to 1,209,600 (14  days). Default: 345,600 (4 days).
     Tcl_Obj *messageRetentionPeriodPtr;
+    Tcl_Obj *message_retention_period_key_ptr = Tcl_NewStringObj("MessageRetentionPeriod", -1);
+    Tcl_IncrRefCount(message_retention_period_key_ptr);
     if (TCL_OK !=
-        Tcl_DictObjGet(interp, dictPtr, Tcl_NewStringObj("MessageRetentionPeriod", -1), &messageRetentionPeriodPtr)) {
+        Tcl_DictObjGet(interp, dictPtr, message_retention_period_key_ptr, &messageRetentionPeriodPtr)) {
+        Tcl_DecrRefCount(message_retention_period_key_ptr);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("error reading attributes dict", -1));
         return TCL_ERROR;
     }
+    Tcl_DecrRefCount(message_retention_period_key_ptr);
     if (messageRetentionPeriodPtr) {
         request.AddAttributes(Aws::SQS::Model::QueueAttributeName::MessageRetentionPeriod,
                               Tcl_GetString(messageRetentionPeriodPtr));
@@ -300,10 +324,14 @@ static int aws_sdk_tcl_sqs_SetQueueAttributes(Tcl_Interp *interp, const char *ha
 
     // Policy   The  queue's  policy. A valid Amazon Web Services policy.
     Tcl_Obj *policyPtr;
-    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, Tcl_NewStringObj("Policy", -1), &policyPtr)) {
+    Tcl_Obj *policy_key_ptr = Tcl_NewStringObj("Policy", -1);
+    Tcl_IncrRefCount(policy_key_ptr);
+    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, policy_key_ptr, &policyPtr)) {
+        Tcl_DecrRefCount(policy_key_ptr);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("error reading attributes dict", -1));
         return TCL_ERROR;
     }
+    Tcl_DecrRefCount(policy_key_ptr);
     if (policyPtr) {
         request.AddAttributes(Aws::SQS::Model::QueueAttributeName::Policy,
                               Tcl_GetString(policyPtr));
@@ -313,11 +341,15 @@ static int aws_sdk_tcl_sqs_SetQueueAttributes(Tcl_Interp *interp, const char *ha
     // which  a  ``ReceiveMessage`` action waits for a message to arrive.
     // Valid values: An integer from 0 to 20 (seconds). Default: 0.
     Tcl_Obj *receiveMessageWaitTimeSecondsPtr;
-    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, Tcl_NewStringObj("ReceiveMessageWaitTimeSeconds", -1),
+    Tcl_Obj *receive_message_wait_time_seconds_key_ptr = Tcl_NewStringObj("ReceiveMessageWaitTimeSeconds", -1);
+    Tcl_IncrRefCount(receive_message_wait_time_seconds_key_ptr);
+    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, receive_message_wait_time_seconds_key_ptr,
                                  &receiveMessageWaitTimeSecondsPtr)) {
+        Tcl_DecrRefCount(receive_message_wait_time_seconds_key_ptr);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("error reading attributes dict", -1));
         return TCL_ERROR;
     }
+    Tcl_DecrRefCount(receive_message_wait_time_seconds_key_ptr);
     if (receiveMessageWaitTimeSecondsPtr) {
         request.AddAttributes(Aws::SQS::Model::QueueAttributeName::ReceiveMessageWaitTimeSeconds,
                               Tcl_GetString(receiveMessageWaitTimeSecondsPtr));
@@ -326,10 +358,14 @@ static int aws_sdk_tcl_sqs_SetQueueAttributes(Tcl_Interp *interp, const char *ha
     // VisibilityTimeout  The visibility timeout for the queue,  in  seconds.
     // Valid  values:  An integer from 0 to 43,200 (12 hours). Default: 30.
     Tcl_Obj *visibilityTimeoutPtr;
-    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, Tcl_NewStringObj("VisibilityTimeout", -1), &visibilityTimeoutPtr)) {
+    Tcl_Obj *visibility_timeout_key_ptr = Tcl_NewStringObj("VisibilityTimeout", -1);
+    Tcl_IncrRefCount(visibility_timeout_key_ptr);
+    if (TCL_OK != Tcl_DictObjGet(interp, dictPtr, visibility_timeout_key_ptr, &visibilityTimeoutPtr)) {
+        Tcl_DecrRefCount(visibility_timeout_key_ptr);
         Tcl_SetObjResult(interp, Tcl_NewStringObj("error reading attributes_dict", -1));
         return TCL_ERROR;
     }
+    Tcl_DecrRefCount(visibility_timeout_key_ptr);
     if (visibilityTimeoutPtr) {
         request.AddAttributes(Aws::SQS::Model::QueueAttributeName::VisibilityTimeout,
                               Tcl_GetString(visibilityTimeoutPtr));
@@ -617,24 +653,50 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
     return TCL_ERROR;
 }
 
+char *aws_sdk_tcl_sqs_VarTraceProc(ClientData clientData, Tcl_Interp *interp, const char *name1, const char *name2, int flags) {
+    auto *trace = (aws_sdk_tcl_sqs_trace_t *) clientData;
+    if (trace->item == nullptr) {
+        DBG(fprintf(stderr, "VarTraceProc: client has been deleted\n"));
+        if (!Tcl_InterpDeleted(trace->interp)) {
+            Tcl_UntraceVar(trace->interp, trace->varname, TCL_TRACE_WRITES|TCL_TRACE_UNSETS,
+                           (Tcl_VarTraceProc*) aws_sdk_tcl_sqs_VarTraceProc,
+                           (ClientData) clientData);
+        }
+        Tcl_Free((char *) trace->varname);
+        Tcl_Free((char *) trace->handle);
+        Tcl_Free((char *) trace);
+        return nullptr;
+    }
+    if (flags & TCL_TRACE_WRITES) {
+        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_WRITES\n"));
+        Tcl_SetVar2(trace->interp, name1, name2, trace->handle, TCL_LEAVE_ERR_MSG);
+        return VAR_READ_ONLY_MSG;
+    }
+    if (flags & TCL_TRACE_UNSETS) {
+        fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n");
+        aws_sdk_tcl_sqs_Destroy(trace->interp, trace->handle);
+        Tcl_Free((char *) trace->varname);
+        Tcl_Free((char *) trace->handle);
+        Tcl_Free((char *) trace);
+    }
+    return nullptr;
+}
+
 static int aws_sdk_tcl_sqs_CreateCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "CreateCmd\n"));
 
-    CheckArgs(2, 2, 1, "config_dict");
+    CheckArgs(2, 3, 1, "config_dict ?varname?");
 
-    Aws::Client::ClientConfiguration clientConfig;
-    Tcl_Obj *region;
-    Tcl_Obj *endpoint;
-    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("region", -1), &region);
-    Tcl_DictObjGet(interp, objv[1], Tcl_NewStringObj("endpoint", -1), &endpoint);
-    if (region) {
-        clientConfig.region = Tcl_GetString(region);
+    auto result = get_client_config_and_credentials_provider(interp, objv[1]);
+    int status = std::get<0>(result);
+    if (TCL_OK != status) {
+        SetResult("Invalid config_dict");
+        return TCL_ERROR;
     }
-    if (endpoint) {
-        clientConfig.endpointOverride = Tcl_GetString(endpoint);
-    }
+    Aws::Client::ClientConfiguration client_config = std::get<1>(result);
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_provider_ptr = std::get<2>(result);
 
-    auto *client = new Aws::SQS::SQSClient(clientConfig);
+    auto *client = credentials_provider_ptr != nullptr ? new Aws::SQS::SQSClient(credentials_provider_ptr, client_config) : new Aws::SQS::SQSClient(client_config);
     char handle[80];
     CMD_NAME(handle, client);
     aws_sdk_tcl_sqs_RegisterName(handle, client);
@@ -644,6 +706,20 @@ static int aws_sdk_tcl_sqs_CreateCmd(ClientData clientData, Tcl_Interp *interp, 
                          nullptr,
                          nullptr);
 //                                 (Tcl_CmdDeleteProc*) aws_sdk_tcl_sqs_clientObjCmdDeleteProc);
+
+    if (objc == 3) {
+        auto *trace = (aws_sdk_tcl_sqs_trace_t *) Tcl_Alloc(sizeof(aws_sdk_tcl_sqs_trace_t));
+        trace->interp = interp;
+        trace->varname = aws_sdk_strndup(Tcl_GetString(objv[2]), 80);
+        trace->handle = aws_sdk_strndup(handle, 80);
+        trace->item = client;
+        const char *objVar = Tcl_GetString(objv[2]);
+        Tcl_UnsetVar(interp, objVar, 0);
+        Tcl_SetVar  (interp, objVar, handle, 0);
+        Tcl_TraceVar(interp,objVar,TCL_TRACE_WRITES|TCL_TRACE_UNSETS,
+                     (Tcl_VarTraceProc*) aws_sdk_tcl_sqs_VarTraceProc,
+                     (ClientData) trace);
+    }
 
     Tcl_SetObjResult(interp, Tcl_NewStringObj(handle, -1));
     return TCL_OK;

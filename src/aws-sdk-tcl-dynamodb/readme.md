@@ -1,6 +1,11 @@
 # TCL DynamoDB Commands
 * **::aws::dynamodb::create** *config_dict*
     - returns a handle to a DynamoDB client
+    - *config_dict* is a dictionary with the following keys:
+      - *region* - the region name
+      - *aws_access_key_id* - the access key id
+      - *aws_secret_access_key* - the secret access key
+      - *aws_session_token* - the session token
 * **::aws::dynamodb::put_item** *handle table item_dict*
     - puts an item into a table
 * **::aws::dynamodb::get_item** *handle table key_dict*

@@ -2,6 +2,11 @@
 
 * **::aws::s3::create** *config_dict*
     - returns a handle to an S3 client
+    - *config_dict* is a dictionary with the following keys:
+      - *region* - the region name
+      - *aws_access_key_id* - the access key id
+      - *aws_secret_access_key* - the secret access key
+      - *aws_session_token* - the session token
 * **::aws::s3::ls** *handle bucket ?key?*
     - returns a list of objects in a bucket
 * **::aws::s3::put_text** *handle bucket key text*
