@@ -197,6 +197,9 @@ int aws_sdk_tcl_s3_PutText(Tcl_Interp *interp, const char *handle, const char *b
     request.SetKey(key);
     request.SetBody(inputData);
     Aws::S3::Model::PutObjectOutcome outcome = client->PutObject(request);
+
+    inputData->clear();
+
     if (!outcome.IsSuccess()) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
         return TCL_ERROR;
@@ -640,7 +643,7 @@ char *aws_sdk_tcl_s3_VarTraceProc(ClientData clientData, Tcl_Interp *interp, con
         return VAR_READ_ONLY_MSG;
     }
     if (flags & TCL_TRACE_UNSETS) {
-        fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n");
+        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n"));
         aws_sdk_tcl_s3_Destroy(trace->interp, trace->handle);
         Tcl_Free((char *) trace->varname);
         Tcl_Free((char *) trace->handle);

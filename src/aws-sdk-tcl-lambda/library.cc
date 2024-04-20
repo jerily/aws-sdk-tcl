@@ -517,7 +517,7 @@ char *aws_sdk_tcl_lambda_VarTraceProc(ClientData clientData, Tcl_Interp *interp,
         return VAR_READ_ONLY_MSG;
     }
     if (flags & TCL_TRACE_UNSETS) {
-        fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n");
+        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n"));
         aws_sdk_tcl_lambda_Destroy(trace->interp, trace->handle);
         Tcl_Free((char *) trace->varname);
         Tcl_Free((char *) trace->handle);
