@@ -1,3 +1,7 @@
+# TCL DynamoDB Examples
+
+See the [examples](examples) directory for examples of using the AWS DynamoDB service with the AWS SDK for Tcl.
+
 # TCL DynamoDB Commands
 * **::aws::dynamodb::create** *config_dict*
     - returns a handle to a DynamoDB client

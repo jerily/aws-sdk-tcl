@@ -1,7 +1,6 @@
 package require awsdynamodb
 
-set dir [file dirname [dict get [info frame 0] file]]
-#load [file join $dir .. build src/aws-sdk-tcl-dynamodb libaws-sdk-tcl-dynamodb.so] Aws_sdk_tcl_dynamodb
+set dir [file dirname [info script]]
 
 set table "MyTable"
 
