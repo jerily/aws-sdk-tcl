@@ -1,3 +1,7 @@
+# TCL S3 Examples
+
+See the [examples](examples) directory for examples of using the AWS S3 service with the AWS SDK for Tcl.
+
 # TCL S3 Commands
 
 * **::aws::s3::create** *config_dict*

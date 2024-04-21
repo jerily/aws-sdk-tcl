@@ -1,76 +1,95 @@
 package require awss3
 
-set dir [file dirname [dict get [info frame 0] file]]
-#load [file join $dir .. build src/aws-sdk-tcl-s3 libaws-sdk-tcl-s3.so] Aws_sdk_tcl_s3
+set dir [file dirname [info script]]
 
 set bucket_name "my-bucket"
 
+# if you want to use it with real AWS S3, you can use the following code:
+# set config_dict [dict create region "us-east-1" aws_access_key_id "your_access_key_id" aws_secret_access_key "your_secret_access_key"]
+# if you want to use it with localstack, you can use the following code:
 set config_dict [dict create endpoint "http://s3.localhost.localstack.cloud:4566"]
-#set config_dict [dict create]
+
 ::aws::s3::create $config_dict s3_client
 
+# checks if the bucket exists already
 puts exists_bucket_before=[$s3_client exists_bucket $bucket_name]
+
+# creates the bucket
 $s3_client create_bucket $bucket_name
+
+# checks if the bucket exists after creation
 puts exists_bucket_after=[$s3_client exists_bucket $bucket_name]
 
+# checks if the object exists already
 puts exists_object_before=[$s3_client exists $bucket_name "test.txt"]
-#::aws::s3::put_text $s3_client $bucket_name "test.txt" "Hello World"
+
+# puts a text object into a file named "test.txt"
 $s3_client put_text $bucket_name "test.txt" "Hello World"
+
+# checks if the object exists after creation
 puts exists_object_after=[$s3_client exists $bucket_name "test.txt"]
 
-#set lst [::aws::s3::ls $s3_client $bucket_name]
-#puts lst=$lst
+# lists all objects in the bucket
+set lst [$s3_client ls $bucket_name]
 
-set lst [::aws::s3::ls $s3_client $bucket_name "test.txt"]
+# lists the object in the bucket before deletion
+set lst [$s3_client ls $bucket_name "test.txt"]
 puts lst_before_delete=$lst
 
-set lst [$s3_client ls $bucket_name "test.txt"]
-puts lst_with_obj_cmd=$lst
-
-#set text [::aws::s3::get $s3_client $bucket_name "test.txt"]
+# gets the text object from the bucket
 set text [$s3_client get $bucket_name "test.txt"]
 puts text=$text
 
-#set chan [open "myfile.txt" "w"]
-#::aws::s3::get $s3_client $bucket_name "test.txt" $chan
-#close $chan
+# downloads the file from the bucket and saves it to a file named "myfile.txt"
 $s3_client get $bucket_name "test.txt" myfile.txt
 puts files=[glob myfile.*]
 
+# deletes the object from the bucket
 ::aws::s3::delete $s3_client $bucket_name "test.txt"
 
-set lst [::aws::s3::ls $s3_client $bucket_name "text.txt"]
+# lists the object in the bucket after deletion
+set lst [$s3_client ls $bucket_name "text.txt"]
 puts lst_after_delete=$lst
 
-#set from_chan [open [file join $dir .. "Google_2015_logo.png"] "rb"]
-#::aws::s3::put $s3_client $bucket_name "my_logo.png" $from_chan
-#close $from_chan
-::aws::s3::put $s3_client $bucket_name "my_logo.png" [file join $dir .. "Google_2015_logo.png"]
-#set to_chan [open "mylogo.png" "wb"]
-#::aws::s3::get $s3_client $bucket_name "my_logo.png" $to_chan
-#close $to_chan
-::aws::s3::get $s3_client $bucket_name "my_logo.png" mylogo.png
-::aws::s3::delete $s3_client $bucket_name "my_logo.png"
+# uploads a file to the bucket with the name "my_logo.png"
+$s3_client put $bucket_name "my_logo.png" [file join $dir .. "Google_2015_logo.png"]
 
+# downloads the file from the bucket and saves it to a file named "mylogo.png"
+$s3_client get $bucket_name "my_logo.png" mylogo.png
+
+# deletes the object from the bucket
+$s3_client delete $bucket_name "my_logo.png"
+
+# uploads two text objects to the bucket with the names "test1.txt" and "test2.txt"
 $s3_client put_text $bucket_name "test1.txt" "Hello World 1"
 $s3_client put_text $bucket_name "test2.txt" "Hello World 2"
+
+# lists all objects in the bucket before deletion
 puts before_batch_delete=[$s3_client ls $bucket_name]
+
+# batch deletes the objects from the bucket
 $s3_client batch_delete $bucket_name [list "test1.txt" "test2.txt"]
+
+# lists all objects in the bucket after deletion
 puts after_batch_delete=[$s3_client ls $bucket_name]
 
+# deletes the bucket
 $s3_client delete_bucket $bucket_name
 
+# creates 3 buckets
 for {set i 0} {$i < 3} {incr i} {
     set bucket_name "my-bucket-$i"
     $s3_client create_bucket $bucket_name
 }
+
+# lists all buckets before deletion
 puts buckets_before_delete=[$s3_client list_buckets]
+
+# deletes the buckets
 for {set i 0} {$i < 3} {incr i} {
     set bucket_name "my-bucket-$i"
     $s3_client delete_bucket $bucket_name
 }
+
+# lists all buckets after deletion
 puts buckets_after_delete=[$s3_client list_buckets]
-
-
-# ::aws::s3::destroy $s3_client
-# $s3_client destroy
