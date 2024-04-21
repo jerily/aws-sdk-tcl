@@ -97,6 +97,8 @@ tclsh8.6 ${TCL_AWS_DIR}/examples/iam.tcl
 tclsh8.6 ${TCL_AWS_DIR}/examples/ssm.tcl
 ```
 
+If you want to see examples with comments for a specific functionality, see Documentation section below.
+
 ## Documentation
 
 * [TCL S3 Commands](./src/aws-sdk-tcl-s3/) - [TCL S3 Examples](./src/aws-sdk-tcl-s3/examples/)
