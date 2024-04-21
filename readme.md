@@ -100,7 +100,7 @@ tclsh8.6 ${TCL_AWS_DIR}/examples/ssm.tcl
 ## Documentation
 
 * [TCL S3 Commands](./src/aws-sdk-tcl-s3/) - [TCL S3 Examples](./src/aws-sdk-tcl-s3/examples/)
-* [TCL DynamoDB Commands](./src/aws-sdk-tcl-dynamodb/) [TCL DynamoDB Examples](./src/aws-sdk-tcl-dynamodb/examples/)
+* [TCL DynamoDB Commands](./src/aws-sdk-tcl-dynamodb/) - [TCL DynamoDB Examples](./src/aws-sdk-tcl-dynamodb/examples/)
 * [TCL Lambda](./src/aws-sdk-tcl-lambda/)
 * [TCL SQS](./src/aws-sdk-tcl-sqs/)
 * [TCL IAM](./src/aws-sdk-tcl-iam/)
