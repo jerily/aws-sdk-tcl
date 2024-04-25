@@ -24,5 +24,5 @@ if {!$exists_p} {
 # puts a text object into a file named "test.txt"
 $s3_client put_text $bucket_name "test.txt" "Hello World"
 
-# lists all objects in the bucket before deletion
+# lists all objects in the bucket
 puts files_in_the_bucket=[$s3_client ls $bucket_name]
