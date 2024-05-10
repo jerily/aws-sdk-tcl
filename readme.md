@@ -51,11 +51,10 @@ export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.4
 cd ${TCL_AWS_DIR}
 mkdir build
 cd build
+cmake .. -DAWS_SDK_CPP_DIR=/usr/local
+# or if TCL is not in the default path (/usr/local/lib):
 # change "TCL_LIBRARY_DIR" and "TCL_INCLUDE_DIR" to the correct paths
-cmake .. \
-  -DTCL_LIBRARY_DIR=/usr/local/lib \
-  -DTCL_INCLUDE_DIR=/usr/local/include \
-  -DAWS_SDK_CPP_DIR=/usr/local
+# cmake .. -DAWS_SDK_CPP_DIR=/usr/local -DTCL_LIBRARY_DIR=/usr/local/lib -DTCL_INCLUDE_DIR=/usr/local/include
 make
 make install
 ```

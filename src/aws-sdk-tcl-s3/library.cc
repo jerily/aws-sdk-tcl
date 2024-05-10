@@ -471,6 +471,35 @@ int aws_sdk_tcl_s3_ListBuckets(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
+char *aws_sdk_tcl_s3_VarTraceProc(ClientData clientData, Tcl_Interp *interp, const char *name1, const char *name2, int flags) {
+    auto *trace = (aws_sdk_tcl_s3_trace_t *) clientData;
+    if (trace->item == nullptr) {
+        DBG(fprintf(stderr, "VarTraceProc: client has been deleted\n"));
+        if (!Tcl_InterpDeleted(trace->interp)) {
+            Tcl_UntraceVar(trace->interp, trace->varname, TCL_TRACE_WRITES|TCL_TRACE_UNSETS,
+                           (Tcl_VarTraceProc*) aws_sdk_tcl_s3_VarTraceProc,
+                           (ClientData) clientData);
+        }
+        Tcl_Free((char *) trace->varname);
+        Tcl_Free((char *) trace->handle);
+        Tcl_Free((char *) trace);
+        return nullptr;
+    }
+    if (flags & TCL_TRACE_WRITES) {
+        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_WRITES\n"));
+        Tcl_SetVar2(trace->interp, name1, name2, trace->handle, TCL_LEAVE_ERR_MSG);
+        return VAR_READ_ONLY_MSG;
+    }
+    if (flags & TCL_TRACE_UNSETS) {
+        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n"));
+        aws_sdk_tcl_s3_Destroy(trace->interp, trace->handle);
+        Tcl_Free((char *) trace->varname);
+        Tcl_Free((char *) trace->handle);
+        Tcl_Free((char *) trace);
+    }
+    return nullptr;
+}
+
 int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[]) {
     static const char *clientMethods[] = {
             "destroy",
@@ -621,35 +650,6 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
 
     Tcl_SetObjResult(interp, Tcl_NewStringObj("Unknown method", -1));
     return TCL_ERROR;
-}
-
-char *aws_sdk_tcl_s3_VarTraceProc(ClientData clientData, Tcl_Interp *interp, const char *name1, const char *name2, int flags) {
-    auto *trace = (aws_sdk_tcl_s3_trace_t *) clientData;
-    if (trace->item == nullptr) {
-        DBG(fprintf(stderr, "VarTraceProc: client has been deleted\n"));
-        if (!Tcl_InterpDeleted(trace->interp)) {
-            Tcl_UntraceVar(trace->interp, trace->varname, TCL_TRACE_WRITES|TCL_TRACE_UNSETS,
-                           (Tcl_VarTraceProc*) aws_sdk_tcl_s3_VarTraceProc,
-                           (ClientData) clientData);
-        }
-        Tcl_Free((char *) trace->varname);
-        Tcl_Free((char *) trace->handle);
-        Tcl_Free((char *) trace);
-        return nullptr;
-    }
-    if (flags & TCL_TRACE_WRITES) {
-        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_WRITES\n"));
-        Tcl_SetVar2(trace->interp, name1, name2, trace->handle, TCL_LEAVE_ERR_MSG);
-        return VAR_READ_ONLY_MSG;
-    }
-    if (flags & TCL_TRACE_UNSETS) {
-        DBG(fprintf(stderr, "VarTraceProc: TCL_TRACE_UNSETS\n"));
-        aws_sdk_tcl_s3_Destroy(trace->interp, trace->handle);
-        Tcl_Free((char *) trace->varname);
-        Tcl_Free((char *) trace->handle);
-        Tcl_Free((char *) trace);
-    }
-    return nullptr;
 }
 
 static int aws_sdk_tcl_s3_CreateCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[]) {
