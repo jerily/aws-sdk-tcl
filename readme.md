@@ -30,7 +30,7 @@ cd build
 cmake .. \
   -DBUILD_SHARED_LIBS=ON \
   -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm" \
+  -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm;kms" \
   -DENABLE_TESTING=OFF \
   -DAUTORUN_UNIT_TESTS=OFF
 cmake --build . --config=Release
