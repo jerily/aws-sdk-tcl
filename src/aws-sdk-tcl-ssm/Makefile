@@ -10,7 +10,7 @@ MOD      =  awsssm.so
 #
 # Objects to build.
 #
-MODOBJS     = library.o
+MODOBJS     = library.o ../common/common.o
 
 MODLIBS  += -laws-cpp-sdk-core -laws-cpp-sdk-ssm
 

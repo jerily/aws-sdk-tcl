@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl-ssm VERSION 1.0.5 LANGUAGES CXX C)
+project(aws-sdk-tcl-ssm VERSION 1.0.6 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(TARGET ${PROJECT_NAME})
