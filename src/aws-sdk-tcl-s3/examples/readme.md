@@ -9,3 +9,4 @@ This directory contains examples of using the AWS S3 service with the AWS SDK fo
 * [s3-download-file.tcl](s3-download-file.tcl) - Demonstrates how to download a file from S3.
 * [s3-list-buckets.tcl](s3-list-buckets.tcl) - Demonstrates how to list all buckets in an account.
 * [s3-batch-delete-files.tcl](s3-batch-delete-files.tcl) - Demonstrates how to delete multiple objects from a bucket.
+* [s3-authv4signer.tcl](s3-authv4signer.tcl) - Demonstrates how to generate authenticated URLs (AWS Signature Version 4)

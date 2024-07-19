@@ -35,4 +35,7 @@ See the [examples](examples) directory for examples of using the AWS S3 service 
     - returns a list of buckets
 * **::aws::s3::destroy** *handle*
     - destroys an S3 client
-
+* **::aws::s3::generate_presigned_url** *?-method method? ?-expire seconds? handle_name bucket key*
+    - returns an authenticated URL (AWS Signature Version 4)
+      - *method* - the HTTP method (GET/POST/PUT etc.)
+      - *seconds* - the expiration date of the generated URL
