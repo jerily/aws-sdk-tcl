@@ -361,9 +361,12 @@ static int aws_sdk_tcl_iam_ListPoliciesCmd(ClientData clientData, Tcl_Interp *in
     return aws_sdk_tcl_iam_ListPolicies(interp, Tcl_GetString(objv[1]));
 }
 
+static Aws::SDKOptions options;
+
 static void aws_sdk_tcl_iam_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_iam_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_iam_NameToInternal_HT);
+    Aws::ShutdownAPI(options);
     Tcl_MutexUnlock(&aws_sdk_tcl_iam_NameToInternal_HT_Mutex);
 
 }
@@ -372,7 +375,6 @@ static void aws_sdk_tcl_iam_ExitHandler(ClientData unused) {
 void aws_sdk_tcl_iam_InitModule() {
     Tcl_MutexLock(&aws_sdk_tcl_iam_NameToInternal_HT_Mutex);
     if (!aws_sdk_tcl_iam_ModuleInitialized) {
-        Aws::SDKOptions options;
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_iam_NameToInternal_HT, TCL_STRING_KEYS);
         Tcl_CreateThreadExitHandler(aws_sdk_tcl_iam_ExitHandler, nullptr);

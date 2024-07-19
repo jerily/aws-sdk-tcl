@@ -624,9 +624,12 @@ static int aws_sdk_tcl_lambda_InvokeFunctionCmd(ClientData clientData, Tcl_Inter
     );
 }
 
+static Aws::SDKOptions options;
+
 static void aws_sdk_tcl_lambda_ExitHandler(ClientData unused) {
     Tcl_MutexLock(&aws_sdk_tcl_lambda_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_lambda_NameToInternal_HT);
+    Aws::ShutdownAPI(options);
     Tcl_MutexUnlock(&aws_sdk_tcl_lambda_NameToInternal_HT_Mutex);
 
 }
@@ -635,7 +638,6 @@ static void aws_sdk_tcl_lambda_ExitHandler(ClientData unused) {
 void aws_sdk_tcl_lambda_InitModule() {
     Tcl_MutexLock(&aws_sdk_tcl_lambda_NameToInternal_HT_Mutex);
     if (!aws_sdk_tcl_lambda_ModuleInitialized) {
-        Aws::SDKOptions options;
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_lambda_NameToInternal_HT, TCL_STRING_KEYS);
         Tcl_CreateThreadExitHandler(aws_sdk_tcl_lambda_ExitHandler, nullptr);

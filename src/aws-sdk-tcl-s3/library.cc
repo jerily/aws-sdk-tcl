@@ -75,6 +75,7 @@ static char s3_client_usage[] =
     "   delete_bucket bucket            \n"
     "   exists_bucket bucket            \n"
     "   list_buckets                    \n"
+    "   generate_presigned_url          \n"
     "   destroy                         \n"
 ;
 
@@ -147,6 +148,7 @@ int aws_sdk_tcl_s3_Destroy(Tcl_Interp *interp, const char *handle) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
         return TCL_ERROR;
     }
+    Aws::S3::S3Client::ShutdownSdkClient(client, -1);
     delete client;
     Tcl_DeleteCommand(interp, handle);
     Tcl_SetObjResult(interp, Tcl_NewStringObj(handle, -1));
@@ -566,6 +568,7 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
             "delete_bucket",
             "exists_bucket",
             "list_buckets",
+            "generate_presigned_url",
             nullptr
     };
 
@@ -581,7 +584,8 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
         m_createBucket,
         m_deleteBucket,
         m_existsBucket,
-        m_listBuckets
+        m_listBuckets,
+        m_generatePresignedUrl
     };
 
     if (objc < 2) {
@@ -696,6 +700,25 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                 return aws_sdk_tcl_s3_ListBuckets(
                         interp,
                         handle
+                );
+            case m_generatePresignedUrl:
+                DBG(fprintf(stderr, "GeneratePresignedUrlMethod\n"));
+                CheckArgs(5,5,1,"generate_presigned_url bucket key http_method expiration_seconds");
+                int http_method;
+                if (TCL_OK != Tcl_GetIndexFromObj(interp, objv[4], aws_sdk_tcl_http_methods, "http_method", 0, &http_method)) {
+                    return TCL_ERROR;
+                }
+                Tcl_WideInt expiration_seconds;
+                if (TCL_OK != Tcl_GetWideIntFromObj(interp, objv[5], &expiration_seconds)) {
+                    return TCL_ERROR;
+                }
+                return aws_sdk_tcl_s3_GeneratePresignedUrl(
+                        interp,
+                        handle,
+                        Tcl_GetString(objv[2]),
+                        Tcl_GetString(objv[3]),
+                        (aws_sdk_tcl_http_method) http_method,
+                        expiration_seconds
                 );
         }
     }
@@ -868,10 +891,13 @@ numArgsError:
 
 }
 
+static Aws::SDKOptions options;
+
 static void aws_sdk_tcl_s3_ExitHandler(ClientData unused)
 {
     Tcl_MutexLock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
     Tcl_DeleteHashTable(&aws_sdk_tcl_s3_NameToInternal_HT);
+    Aws::ShutdownAPI(options);
     Tcl_MutexUnlock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
 
 }
@@ -880,7 +906,6 @@ static void aws_sdk_tcl_s3_ExitHandler(ClientData unused)
 void aws_sdk_tcl_s3_InitModule() {
     Tcl_MutexLock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);
     if (!aws_sdk_tcl_s3_ModuleInitialized) {
-        Aws::SDKOptions options;
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_s3_NameToInternal_HT, TCL_STRING_KEYS);
         Tcl_CreateThreadExitHandler(aws_sdk_tcl_s3_ExitHandler, nullptr);
