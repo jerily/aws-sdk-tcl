@@ -381,13 +381,16 @@ void aws_sdk_tcl_iam_InitModule() {
     Tcl_MutexUnlock(&aws_sdk_tcl_iam_NameToInternal_HT_Mutex);
 }
 
+#if TCL_MAJOR_VERSION > 8
+#define MIN_VERSION "9.0"
+#else
+#define MIN_VERSION "8.6"
+#endif
+
 int Aws_sdk_tcl_iam_Init(Tcl_Interp *interp) {
 
-    int major, minor, patchLevel, type;
-    Tcl_GetVersion(&major, &minor, &patchLevel, &type);
-
-    const char *version = major == 9 ? "9.0" : "8.6";
-    if (Tcl_InitStubs(interp, version, 0) == nullptr) {
+    if (Tcl_InitStubs(interp, MIN_VERSION, 0) == nullptr) {
+        SetResult("Tcl_InitStubs failed");
         return TCL_ERROR;
     }
 
