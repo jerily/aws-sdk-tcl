@@ -4,33 +4,18 @@
  * SPDX-License-Identifier: MIT.
  */
 
-/*
-#include <iostream>
-#include <aws/core/Aws.h>
-#include <aws/core/auth/AWSCredentials.h>
-#include <aws/core/auth/AWSCredentialsProvider.h>
-#include <aws/s3/S3Client.h>
-#include <aws/s3/model/ListObjectsRequest.h>
-#include "aws/s3/model/PutObjectRequest.h"
-#include "aws/s3/model/GetObjectRequest.h"
-#include "aws/s3/model/DeleteObjectRequest.h"
-#include "aws/s3/model/HeadObjectRequest.h"
-#include <aws/s3/model/Object.h>
-#include <cstdio>
-#include <fstream>
-#include <aws/s3/model/CreateBucketRequest.h>
-#include <aws/s3/model/DeleteBucketRequest.h>
-#include <aws/s3/model/HeadBucketRequest.h>
-#include <aws/s3/model/Delete.h>
-#include <aws/s3/model/DeleteObjectsRequest.h>
-*/
-
 #include <aws/kms/KMSClient.h>
 #include <aws/kms/model/ListKeysRequest.h>
 #include <aws/kms/model/CreateKeyRequest.h>
 #include <aws/kms/model/DescribeKeyRequest.h>
 #include <aws/kms/model/EnableKeyRequest.h>
 #include <aws/kms/model/DisableKeyRequest.h>
+#include <aws/kms/model/ScheduleKeyDeletionRequest.h>
+#include <aws/kms/model/CancelKeyDeletionRequest.h>
+#include <aws/kms/model/EncryptRequest.h>
+#include <aws/kms/model/DecryptRequest.h>
+#include <aws/kms/model/GenerateDataKeyRequest.h>
+#include <aws/kms/model/GenerateRandomRequest.h>
 
 #include "library.h"
 #include "../common/common.h"
@@ -79,12 +64,18 @@ static int           aws_sdk_tcl_kms_ModuleInitialized;
 
 static char kms_client_usage[] =
     "Usage kmsClient <method> <args>, where method can be:\n"
-    "   list_keys                       \n"
-    "   create_key                      \n"
-    "   describe_key                    \n"
-    "   enable_key                      \n"
-    "   disable_key                     \n"
-    "   destroy                         \n"
+    "   list_keys                                          \n"
+    "   create_key                                         \n"
+    "   describe_key arn                                   \n"
+    "   enable_key arn                                     \n"
+    "   disable_key arn                                    \n"
+    "   schedule_key_deletion arn ?pending_window_in_days? \n"
+    "   cancel_key_deletion arn                            \n"
+    "   encrypt arn plain_data                             \n"
+    "   decrypt cipher_data                                \n"
+    "   generate_data_key arn number_of_bytes              \n"
+    "   generate_random number_of_bytes                    \n"
+    "   destroy                                            \n"
 ;
 
 static int aws_sdk_tcl_kms_RegisterName(const char *name, Aws::KMS::KMSClient *internal) {
@@ -323,6 +314,161 @@ int aws_sdk_tcl_kms_DisableKey(Tcl_Interp *interp, const char *handle, const cha
     return TCL_OK;
 }
 
+int aws_sdk_tcl_kms_ScheduleKeyDeletion(Tcl_Interp *interp, const char *handle, const char *arn, int pending_window) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_kms_ScheduleKeyDeletion: handle=%s arn=%s pending_window=%d\n", handle, arn, pending_window));
+    Aws::KMS::KMSClient *client = aws_sdk_tcl_kms_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::KMS::Model::ScheduleKeyDeletionRequest request;
+    request.SetKeyId(arn);
+    if (pending_window != -1) {
+        request.SetPendingWindowInDays(pending_window);
+    }
+
+    Aws::KMS::Model::ScheduleKeyDeletionOutcome outcome = client->ScheduleKeyDeletion(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    Tcl_SetObjResult(interp, Tcl_NewWideIntObj(outcome.GetResult().GetDeletionDate().Seconds()));
+    return TCL_OK;
+}
+
+int aws_sdk_tcl_kms_CancelKeyDeletion(Tcl_Interp *interp, const char *handle, const char *arn) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_kms_CancelKeyDeletion: handle=%s arn=%s\n", handle, arn));
+    Aws::KMS::KMSClient *client = aws_sdk_tcl_kms_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::KMS::Model::CancelKeyDeletionRequest request;
+    request.SetKeyId(arn);
+
+    Aws::KMS::Model::CancelKeyDeletionOutcome outcome = client->CancelKeyDeletion(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    Tcl_SetObjResult(interp, Tcl_NewStringObj(arn, -1));
+    return TCL_OK;
+}
+
+int aws_sdk_tcl_kms_Encrypt(Tcl_Interp *interp, const char *handle, const char *arn, const unsigned char *buffer, Tcl_Size size) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_kms_Encrypt: handle=%s arn=%s buffer=%p size=%" TCL_SIZE_MODIFIER "d\n", handle, arn, (void *)buffer, size));
+    Aws::KMS::KMSClient *client = aws_sdk_tcl_kms_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::Utils::ByteBuffer aws_buffer(buffer, size);
+
+    Aws::KMS::Model::EncryptRequest request;
+    request.SetKeyId(arn);
+    request.SetPlaintext(aws_buffer);
+
+    Aws::KMS::Model::EncryptOutcome outcome = client->Encrypt(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    const Aws::Utils::ByteBuffer cipher = outcome.GetResult().GetCiphertextBlob();
+
+    Tcl_SetObjResult(interp, Tcl_NewByteArrayObj(cipher.GetUnderlyingData(), cipher.GetLength()));
+    return TCL_OK;
+}
+
+int aws_sdk_tcl_kms_Decrypt(Tcl_Interp *interp, const char *handle, const unsigned char *buffer, Tcl_Size size) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_kms_Encrypt: handle=%s buffer=%p size=%" TCL_SIZE_MODIFIER "d\n", handle, (void *)buffer, size));
+    Aws::KMS::KMSClient *client = aws_sdk_tcl_kms_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::Utils::ByteBuffer aws_buffer(buffer, size);
+
+    Aws::KMS::Model::DecryptRequest request;
+    request.SetCiphertextBlob(aws_buffer);
+
+    Aws::KMS::Model::DecryptOutcome outcome = client->Decrypt(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    const Aws::Utils::CryptoBuffer plain = outcome.GetResult().GetPlaintext();
+
+    Tcl_SetObjResult(interp, Tcl_NewByteArrayObj(plain.GetUnderlyingData(), plain.GetLength()));
+    return TCL_OK;
+}
+
+int aws_sdk_tcl_kms_GenerateDataKey(Tcl_Interp *interp, const char *handle, const char *arn, int num_bytes) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_kms_GenerateDataKey: handle=%s arn=%s num_bytes=%d\n", handle, arn, num_bytes));
+    Aws::KMS::KMSClient *client = aws_sdk_tcl_kms_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::KMS::Model::GenerateDataKeyRequest request;
+    request.SetKeyId(arn);
+    request.SetNumberOfBytes(num_bytes);
+
+    Aws::KMS::Model::GenerateDataKeyOutcome outcome = client->GenerateDataKey(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    Tcl_Obj *objv[2];
+
+    const Aws::Utils::CryptoBuffer plain = outcome.GetResult().GetPlaintext();
+    objv[0] = Tcl_NewByteArrayObj(plain.GetUnderlyingData(), plain.GetLength());
+
+    const Aws::Utils::ByteBuffer cipher = outcome.GetResult().GetCiphertextBlob();
+    objv[1] = Tcl_NewByteArrayObj(cipher.GetUnderlyingData(), cipher.GetLength());
+
+    Tcl_SetObjResult(interp, Tcl_NewListObj(2, objv));
+    return TCL_OK;
+}
+
+int aws_sdk_tcl_kms_GenerateRandom(Tcl_Interp *interp, const char *handle, int num_bytes) {
+    DBG(fprintf(stderr, "aws_sdk_tcl_kms_GenerateRandom: handle=%s num_bytes=%d\n", handle, num_bytes));
+    Aws::KMS::KMSClient *client = aws_sdk_tcl_kms_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+
+    Aws::KMS::Model::GenerateRandomRequest request;
+    request.SetNumberOfBytes(num_bytes);
+
+    Aws::KMS::Model::GenerateRandomOutcome outcome = client->GenerateRandom(request);
+
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
+        return TCL_ERROR;
+    }
+
+    const Aws::Utils::CryptoBuffer data = outcome.GetResult().GetPlaintext();
+
+    Tcl_SetObjResult(interp, Tcl_NewByteArrayObj(data.GetUnderlyingData(), data.GetLength()));
+    return TCL_OK;
+}
+
 char *aws_sdk_tcl_kms_VarTraceProc(ClientData clientData, Tcl_Interp *interp, const char *name1, const char *name2, int flags) {
     auto *trace = (aws_sdk_tcl_kms_trace_t *) clientData;
     if (trace->item == nullptr) {
@@ -361,6 +507,12 @@ int aws_sdk_tcl_kms_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int
             "describe_key",
             "enable_key",
             "disable_key",
+            "schedule_key_deletion",
+            "cancel_key_deletion",
+            "encrypt",
+            "decrypt",
+            "generate_data_key",
+            "generate_random",
             nullptr
     };
 
@@ -370,7 +522,13 @@ int aws_sdk_tcl_kms_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int
         m_createKey,
         m_describeKey,
         m_enableKey,
-        m_disableKey
+        m_disableKey,
+        m_scheduleKeyDeletion,
+        m_cancelKeyDeletion,
+        m_encrypt,
+        m_decrypt,
+        m_generateDataKey,
+        m_generateRandom
     };
 
     Tcl_ResetResult(interp);
@@ -411,6 +569,51 @@ int aws_sdk_tcl_kms_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int
             DBG(fprintf(stderr, "DisableKeyMethod\n"));
             CheckArgs(3,3,1,"disable_key arn");
             return aws_sdk_tcl_kms_DisableKey(interp, handle, Tcl_GetString(objv[2]));
+        case m_scheduleKeyDeletion: {
+            DBG(fprintf(stderr, "ScheduleKeyDeletionMethod\n"));
+            CheckArgs(3,4,1,"schedule_key_deletion arn ?pending_window_in_days?");
+            int pending_window = -1;
+            if (objc > 3 && Tcl_GetIntFromObj(interp, objv[3], &pending_window) != TCL_OK) {
+                return TCL_ERROR;
+            }
+            return aws_sdk_tcl_kms_ScheduleKeyDeletion(interp, handle, Tcl_GetString(objv[2]), pending_window);
+        }
+        case m_cancelKeyDeletion:
+            DBG(fprintf(stderr, "CancelKeyDeletionMethod\n"));
+            CheckArgs(3,3,1,"cancel_key_deletion arn");
+            return aws_sdk_tcl_kms_CancelKeyDeletion(interp, handle, Tcl_GetString(objv[2]));
+        case m_encrypt: {
+            DBG(fprintf(stderr, "EncryptMethod\n"));
+            CheckArgs(4,4,1,"encrypt arn plain_data");
+            Tcl_Size size;
+            const unsigned char *buffer = Tcl_GetByteArrayFromObj(objv[3], &size);
+            return aws_sdk_tcl_kms_Encrypt(interp, handle, Tcl_GetString(objv[2]), buffer, size);
+        }
+        case m_decrypt: {
+            DBG(fprintf(stderr, "DecryptMethod\n"));
+            CheckArgs(3,3,1,"decrypt cipher_data");
+            Tcl_Size size;
+            const unsigned char *buffer = Tcl_GetByteArrayFromObj(objv[2], &size);
+            return aws_sdk_tcl_kms_Decrypt(interp, handle, buffer, size);
+        }
+        case m_generateDataKey: {
+            DBG(fprintf(stderr, "GenerateDataKeyMethod\n"));
+            CheckArgs(4,4,1,"generate_data_key arn number_of_bytes");
+            int num_bytes;
+            if (Tcl_GetIntFromObj(interp, objv[3], &num_bytes) != TCL_OK) {
+                return TCL_ERROR;
+            }
+            return aws_sdk_tcl_kms_GenerateDataKey(interp, handle, Tcl_GetString(objv[2]), num_bytes);
+        }
+        case m_generateRandom: {
+            DBG(fprintf(stderr, "GenerateRandomMethod\n"));
+            CheckArgs(3,3,1,"generate_random number_of_bytes");
+            int num_bytes;
+            if (Tcl_GetIntFromObj(interp, objv[2], &num_bytes) != TCL_OK) {
+                return TCL_ERROR;
+            }
+            return aws_sdk_tcl_kms_GenerateRandom(interp, handle, num_bytes);
+        }
     }
 
     Tcl_SetObjResult(interp, Tcl_NewStringObj("Unknown method", -1));
@@ -500,6 +703,58 @@ static int aws_sdk_tcl_kms_DisableKeyCmd(ClientData  clientData, Tcl_Interp *int
     return aws_sdk_tcl_kms_DisableKey(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
 }
 
+static int aws_sdk_tcl_kms_ScheduleKeyDeletionCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "ScheduleKeyDeletionCmd\n"));
+    CheckArgs(3,4,1,"handle arn ?pending_window_in_days?");
+    int pending_window = -1;
+    if (objc > 3 && Tcl_GetIntFromObj(interp, objv[3], &pending_window) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    return aws_sdk_tcl_kms_ScheduleKeyDeletion(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), pending_window);
+}
+
+static int aws_sdk_tcl_kms_CancelKeyDeletionCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "CancelKeyDeletionCmd\n"));
+    CheckArgs(3,3,1,"handle arn");
+    return aws_sdk_tcl_kms_CancelKeyDeletion(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
+}
+
+static int aws_sdk_tcl_kms_EncryptCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "EncryptCmd\n"));
+    CheckArgs(4,4,1,"handle arn plain_data");
+    Tcl_Size size;
+    const unsigned char *buffer = Tcl_GetByteArrayFromObj(objv[3], &size);
+    return aws_sdk_tcl_kms_Encrypt(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), buffer, size);
+}
+
+static int aws_sdk_tcl_kms_DecryptCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "DecryptCmd\n"));
+    CheckArgs(3,3,1,"handle cipher_data");
+    Tcl_Size size;
+    const unsigned char *buffer = Tcl_GetByteArrayFromObj(objv[2], &size);
+    return aws_sdk_tcl_kms_Decrypt(interp, Tcl_GetString(objv[1]), buffer, size);
+}
+
+static int aws_sdk_tcl_kms_GenerateDataKeyCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "GenerateDataKeyCmd\n"));
+    CheckArgs(4,4,1,"handle arn number_of_bytes");
+    int num_bytes;
+    if (Tcl_GetIntFromObj(interp, objv[3], &num_bytes) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    return aws_sdk_tcl_kms_GenerateDataKey(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), num_bytes);
+}
+
+static int aws_sdk_tcl_kms_GenerateRandomCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
+    DBG(fprintf(stderr, "GenerateRandomCmd\n"));
+    CheckArgs(3,3,1,"handle number_of_bytes");
+    int num_bytes;
+    if (Tcl_GetIntFromObj(interp, objv[2], &num_bytes) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    return aws_sdk_tcl_kms_GenerateRandom(interp, Tcl_GetString(objv[1]), num_bytes);
+}
+
 static Aws::SDKOptions options;
 
 static void aws_sdk_tcl_kms_ExitHandler(ClientData unused)
@@ -544,6 +799,12 @@ int Aws_sdk_tcl_kms_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::kms::describe_key", aws_sdk_tcl_kms_DescribeKeyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::kms::enable_key", aws_sdk_tcl_kms_EnableKeyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::kms::disable_key", aws_sdk_tcl_kms_DisableKeyCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::kms::schedule_key_deletion", aws_sdk_tcl_kms_ScheduleKeyDeletionCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::kms::cancel_key_deletion", aws_sdk_tcl_kms_CancelKeyDeletionCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::kms::encrypt", aws_sdk_tcl_kms_EncryptCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::kms::decrypt", aws_sdk_tcl_kms_DecryptCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::kms::generate_data_key", aws_sdk_tcl_kms_GenerateDataKeyCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::kms::generate_random", aws_sdk_tcl_kms_GenerateRandomCmd, nullptr, nullptr);
 
     return Tcl_PkgProvide(interp, "awskms", XSTR(VERSION));
 }
