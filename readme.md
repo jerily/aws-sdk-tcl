@@ -79,6 +79,9 @@ make install
 cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-ssm
 make
 make install
+cd ${TCL_AWS_DIR}/src/aws-sdk-tcl-kms
+make
+make install
 ```
 
 ## Try out the examples
