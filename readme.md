@@ -109,3 +109,4 @@ If you want to see examples with comments for a specific functionality, see Docu
 * [TCL SQS](./src/aws-sdk-tcl-sqs/)
 * [TCL IAM](./src/aws-sdk-tcl-iam/)
 * [TCL SSM](./src/aws-sdk-tcl-ssm/)
+* [TCL KMS](./src/aws-sdk-tcl-kms/) - [TCL KMS Examples](./src/aws-sdk-tcl-kms/examples/)
