@@ -908,7 +908,7 @@ void aws_sdk_tcl_s3_InitModule() {
     if (!aws_sdk_tcl_s3_ModuleInitialized) {
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_s3_NameToInternal_HT, TCL_STRING_KEYS);
-        Tcl_CreateThreadExitHandler(aws_sdk_tcl_s3_ExitHandler, nullptr);
+        Tcl_CreateExitHandler(aws_sdk_tcl_s3_ExitHandler, nullptr);
         aws_sdk_tcl_s3_ModuleInitialized = 1;
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_s3_NameToInternal_HT_Mutex);

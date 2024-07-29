@@ -1199,7 +1199,7 @@ void aws_sdk_tcl_dynamodb_InitModule() {
     if (!aws_sdk_tcl_dynamodb_ModuleInitialized) {
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_dynamodb_NameToInternal_HT, TCL_STRING_KEYS);
-        Tcl_CreateThreadExitHandler(aws_sdk_tcl_dynamodb_ExitHandler, nullptr);
+        Tcl_CreateExitHandler(aws_sdk_tcl_dynamodb_ExitHandler, nullptr);
         aws_sdk_tcl_dynamodb_ModuleInitialized = 1;
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_dynamodb_NameToInternal_HT_Mutex);
