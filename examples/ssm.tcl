@@ -11,5 +11,9 @@ if { [catch {$client get_parameter "/test/parameter"} err] } {
     puts "Parameter not deleted"
 }
 
+$client put_parameter "/test/password" "secret value" "SecureString"
+puts password_parameter=[$client get_parameter "/test/password" true]
+$client delete_parameter "/test/password"
+
 # client is destroyed via trace var, otherwise:
 # $client destroy

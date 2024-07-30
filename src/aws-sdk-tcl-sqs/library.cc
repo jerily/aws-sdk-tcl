@@ -856,7 +856,7 @@ void aws_sdk_tcl_sqs_InitModule() {
     if (!aws_sdk_tcl_sqs_ModuleInitialized) {
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_sqs_NameToInternal_HT, TCL_STRING_KEYS);
-        Tcl_CreateExitHandler(aws_sdk_tcl_sqs_ExitHandler, nullptr);
+        Tcl_CreateThreadExitHandler(aws_sdk_tcl_sqs_ExitHandler, nullptr);
         aws_sdk_tcl_sqs_ModuleInitialized = 1;
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_sqs_NameToInternal_HT_Mutex);

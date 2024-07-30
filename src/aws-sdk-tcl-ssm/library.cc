@@ -126,7 +126,7 @@ int aws_sdk_tcl_ssm_Destroy(Tcl_Interp *interp, const char *handle) {
     return TCL_OK;
 }
 
-int aws_sdk_tcl_ssm_PutParameter(Tcl_Interp *interp, const char *handle, const char *name, const char *value, Tcl_Obj *type) {
+int aws_sdk_tcl_ssm_PutParameter(Tcl_Interp *interp, const char *handle, const char *name, const char *value, Tcl_Obj *type, int overwrite) {
     Aws::SSM::SSMClient *client = aws_sdk_tcl_ssm_GetInternalFromName(handle);
     if (!client) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
@@ -136,6 +136,7 @@ int aws_sdk_tcl_ssm_PutParameter(Tcl_Interp *interp, const char *handle, const c
     Aws::SSM::Model::PutParameterRequest request;
     request.SetName(name);
     request.SetValue(value);
+    request.SetOverwrite(overwrite);
 
     if (type) {
         Tcl_Size type_length;
@@ -161,7 +162,7 @@ int aws_sdk_tcl_ssm_PutParameter(Tcl_Interp *interp, const char *handle, const c
     return TCL_OK;
 }
 
-int aws_sdk_tcl_ssm_GetParameter(Tcl_Interp *interp, const char *handle, const char *name) {
+int aws_sdk_tcl_ssm_GetParameter(Tcl_Interp *interp, const char *handle, const char *name, int with_decryption) {
     Aws::SSM::SSMClient *client = aws_sdk_tcl_ssm_GetInternalFromName(handle);
     if (!client) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
@@ -170,6 +171,7 @@ int aws_sdk_tcl_ssm_GetParameter(Tcl_Interp *interp, const char *handle, const c
 
     Aws::SSM::Model::GetParameterRequest request;
     request.SetName(name);
+    request.SetWithDecryption(with_decryption);
 
     auto outcome = client->GetParameter(request);
     if (!outcome.IsSuccess()) {
@@ -178,7 +180,26 @@ int aws_sdk_tcl_ssm_GetParameter(Tcl_Interp *interp, const char *handle, const c
     }
 
     const Aws::SSM::Model::Parameter &parameter = outcome.GetResult().GetParameter();
-    Tcl_SetObjResult(interp, Tcl_NewStringObj(parameter.GetValue().c_str(), -1));
+    Tcl_Obj *result_ptr = Tcl_NewDictObj();
+    Tcl_IncrRefCount(result_ptr);
+    if (TCL_OK != Tcl_DictObjPut(interp, result_ptr, Tcl_NewStringObj("name", -1), Tcl_NewStringObj(parameter.GetName().c_str(), -1))) {
+        Tcl_DecrRefCount(result_ptr);
+        return TCL_ERROR;
+    }
+    if (TCL_OK != Tcl_DictObjPut(interp, result_ptr, Tcl_NewStringObj("type", -1), Tcl_NewStringObj(Aws::SSM::Model::ParameterTypeMapper::GetNameForParameterType(parameter.GetType()).c_str(), -1))) {
+        Tcl_DecrRefCount(result_ptr);
+        return TCL_ERROR;
+    }
+    if (TCL_OK != Tcl_DictObjPut(interp, result_ptr, Tcl_NewStringObj("value", -1), Tcl_NewStringObj(parameter.GetValue().c_str(), -1))) {
+        Tcl_DecrRefCount(result_ptr);
+        return TCL_ERROR;
+    }
+    if (TCL_OK != Tcl_DictObjPut(interp, result_ptr, Tcl_NewStringObj("version", -1), Tcl_NewLongObj(parameter.GetVersion()))) {
+        Tcl_DecrRefCount(result_ptr);
+        return TCL_ERROR;
+    }
+    Tcl_SetObjResult(interp, result_ptr);
+    Tcl_DecrRefCount(result_ptr);
     return TCL_OK;
 }
 
@@ -231,19 +252,40 @@ int aws_sdk_tcl_ssm_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
         switch ((enum clientMethod) methodIndex) {
             case m_destroy:
                 return aws_sdk_tcl_ssm_Destroy(interp, handle);
-            case m_putParameter:
+            case m_putParameter: {
+                CheckArgs(4, 6, 1, "put_parameter name value ?type? ?overwrite?");
+                int overwrite = 0;
+                if (objc == 6) {
+                    if (TCL_OK != Tcl_GetBooleanFromObj(interp, objv[5], &overwrite)) {
+                        SetResult("Invalid overwrite value");
+                        return TCL_ERROR;
+                    }
+                }
                 return aws_sdk_tcl_ssm_PutParameter(
                         interp,
                         handle,
                         Tcl_GetString(objv[2]),
                         Tcl_GetString(objv[3]),
-                        objc == 5 ? objv[4]: nullptr);
-            case m_getParameter:
+                        objc >= 5 ? objv[4] : nullptr,
+                        overwrite);
+            }
+            case m_getParameter: {
+                CheckArgs(3, 4, 1, "get_parameter name ?with_decryption?");
+                int with_decryption = 0;
+                if (objc == 4) {
+                    if (TCL_OK != Tcl_GetBooleanFromObj(interp, objv[3], &with_decryption)) {
+                        SetResult("Invalid with_decryption value");
+                        return TCL_ERROR;
+                    }
+                }
                 return aws_sdk_tcl_ssm_GetParameter(
                         interp,
                         handle,
-                        Tcl_GetString(objv[2]));
+                        Tcl_GetString(objv[2]),
+                        with_decryption);
+            }
             case m_deleteParameter:
+                CheckArgs(3, 3, 1, "delete_parameter name");
                 return aws_sdk_tcl_ssm_DeleteParameter(
                         interp,
                         handle,
@@ -336,24 +378,41 @@ static int aws_sdk_tcl_ssm_DestroyCmd(ClientData clientData, Tcl_Interp *interp,
 
 static int aws_sdk_tcl_ssm_PutParameterCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "PutParameterCmd\n"));
-    CheckArgs(4, 5, 1, "handle name value ?type?");
+    CheckArgs(4, 6, 1, "handle name value ?type? ?overwrite?");
+
+    int overwrite = 0;
+    if (objc == 6) {
+        if (TCL_OK != Tcl_GetBooleanFromObj(interp, objv[5], &overwrite)) {
+            SetResult("Invalid overwrite value");
+            return TCL_ERROR;
+        }
+    }
+
     return aws_sdk_tcl_ssm_PutParameter(
             interp,
             Tcl_GetString(objv[1]),
             Tcl_GetString(objv[2]),
             Tcl_GetString(objv[3]),
-            objc == 5 ? objv[4]: nullptr
+            objc >= 5 ? objv[4]: nullptr,
+            overwrite
     );
 }
 
 static int aws_sdk_tcl_ssm_GetParameterCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "GetParameterCmd\n"));
-    CheckArgs(3, 4, 1, "handle name");
+    CheckArgs(4, 5, 1, "handle name ?with_decryption?");
+    int with_decryption = 0;
+    if (objc == 5) {
+        if (TCL_OK != Tcl_GetBooleanFromObj(interp, objv[4], &with_decryption)) {
+            SetResult("Invalid with_decryption value");
+            return TCL_ERROR;
+        }
+    }
     return aws_sdk_tcl_ssm_GetParameter(
             interp,
             Tcl_GetString(objv[1]),
-            Tcl_GetString(objv[2])
-    );
+            Tcl_GetString(objv[2]),
+            with_decryption);
 }
 
 static int aws_sdk_tcl_ssm_DeleteParameterCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
@@ -382,7 +441,7 @@ void aws_sdk_tcl_ssm_InitModule() {
     if (!aws_sdk_tcl_ssm_ModuleInitialized) {
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_ssm_NameToInternal_HT, TCL_STRING_KEYS);
-        Tcl_CreateExitHandler(aws_sdk_tcl_ssm_ExitHandler, nullptr);
+        Tcl_CreateThreadExitHandler(aws_sdk_tcl_ssm_ExitHandler, nullptr);
         aws_sdk_tcl_ssm_ModuleInitialized = 1;
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_ssm_NameToInternal_HT_Mutex);

@@ -770,7 +770,7 @@ void aws_sdk_tcl_kms_InitModule() {
     if (!aws_sdk_tcl_kms_ModuleInitialized) {
         Aws::InitAPI(options);
         Tcl_InitHashTable(&aws_sdk_tcl_kms_NameToInternal_HT, TCL_STRING_KEYS);
-        Tcl_CreateExitHandler(aws_sdk_tcl_kms_ExitHandler, nullptr);
+        Tcl_CreateThreadExitHandler(aws_sdk_tcl_kms_ExitHandler, nullptr);
         aws_sdk_tcl_kms_ModuleInitialized = 1;
     }
     Tcl_MutexUnlock(&aws_sdk_tcl_kms_NameToInternal_HT_Mutex);
