@@ -8,9 +8,9 @@
     - *aws_session_token* - the session token
 * **::aws::ssm::destroy** *handle*
   - destroys an ssm client
-* **::aws::ssm::put_parameter** *handle* *name* *value* *type*
+* **::aws::ssm::put_parameter** *handle* *name* *value* *?type?* *?overwrite?*
   - puts a parameter into the parameter store
-* **::aws::ssm::get_parameter** *handle* *name*
-  - gets a parameter from the parameter store
+* **::aws::ssm::get_parameter** *handle* *name* *?with_decryption?*
+  - gets a parameter from the parameter store, returns a dict that consists of name, type, value, and version
 * **::aws::ssm::delete_parameter** *handle* *name*
   - deletes a parameter from the parameter store
