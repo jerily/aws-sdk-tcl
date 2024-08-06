@@ -4,3 +4,6 @@ build
 models
 *.o
 *.so
+
+/ttrek-lock.json
+/ttrek-venv
