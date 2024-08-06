@@ -1,0 +1,52 @@
+{
+  "name": "aws-sdk-tcl",
+  "version": "1.0.9",
+  "scripts": {
+
+  },
+  "dependencies": {
+    "tcl": "^9.0.0-beta.2",
+    "aws-sdk-cpp": "^1.11.157"
+  },
+  "devDependencies": {
+
+  },
+  "build": {
+    "default": [
+      {
+        "cmd": "download",
+        "url": "https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.9.tar.gz"
+      },
+      {
+        "cmd": "unpack"
+      },
+      {
+        "cmd": "cd"
+      },
+      {
+        "cmd": "cmake_config",
+        "options": [
+          {
+            "name": "TCL_LIBRARY_DIR",
+            "value": "$INSTALL_DIR/lib"
+          },
+          {
+            "name": "TCL_INCLUDE_DIR",
+            "value": "$INSTALL_DIR/include"
+          },
+          {
+            "name": "AWS_SDK_CPP_DIR",
+            "value": "$INSTALL_DIR"
+          }
+        ]
+      },
+      {
+        "cmd": "make",
+        "parallel": true
+      },
+      {
+        "cmd": "make_install"
+      }
+    ]
+  }
+}
