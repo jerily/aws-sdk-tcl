@@ -14,6 +14,8 @@ See the [examples](examples) directory for examples of using the AWS DynamoDB se
     - puts an item into a table
 * **::aws::dynamodb::get_item** *handle table key_dict*
     - gets an item from a table
+* **::aws::dynamodb::delete_item** *handle table key_dict*
+    - deletes an item from a table
 * **::aws::dynamodb::query_items** *handle table query_dict ?projection_expression? ?scan_forward? ?limit? ?index_name?*
     - queries items from a table
 * **::aws::dynamodb::scan** *handle table ?projection_expression?*
