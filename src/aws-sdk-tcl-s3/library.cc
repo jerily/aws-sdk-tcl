@@ -21,6 +21,14 @@
 #include <aws/s3/model/HeadBucketRequest.h>
 #include <aws/s3/model/Delete.h>
 #include <aws/s3/model/DeleteObjectsRequest.h>
+#include <aws/s3/model/CreateMultipartUploadRequest.h>
+#include <aws/s3/model/UploadPartRequest.h>
+#include <aws/s3/model/CompleteMultipartUploadRequest.h>
+#include <aws/s3/model/CompletedMultipartUpload.h>
+#include <aws/s3/model/CompletedPart.h>
+#include <aws/s3/model/AbortMultipartUploadRequest.h>
+#include <algorithm>
+#include <exception>
 #include "library.h"
 #include "../common/common.h"
 
@@ -67,6 +75,11 @@ static char s3_client_usage[] =
     "   ls bucket ?key?                 \n"
     "   put_text bucket key text        \n"
     "   put bucket key input_file       \n"
+    "   put_multipart bucket key input_file ?part_size?\n"
+    "   create_multipart_upload bucket key ?content_type?\n"
+    "   upload_part bucket key upload_id part_number data\n"
+    "   complete_multipart_upload bucket key upload_id parts\n"
+    "   abort_multipart_upload bucket key upload_id\n"
     "   get bucket key ?output_file?    \n"
     "   delete bucket key               \n"
     "   batch_delete bucket keys        \n"
@@ -312,6 +325,270 @@ int aws_sdk_tcl_s3_PutChannel(Tcl_Interp *interp, const char *handle, const char
         return TCL_ERROR;
     } else {
         return TCL_OK;
+    }
+}
+
+static const Tcl_WideInt s3_min_part_size = 5LL * 1024 * 1024;
+static const Tcl_WideInt s3_max_part_size = 5LL * 1024 * 1024 * 1024;
+static const int s3_max_parts = 10000;
+
+static int aws_sdk_tcl_s3_PartNumber(Tcl_Interp *interp, Tcl_Obj *obj, int *number) {
+    if (Tcl_GetIntFromObj(interp, obj, number) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    if (*number < 1 || *number > s3_max_parts) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("part_number must be between 1 and 10000", -1));
+        return TCL_ERROR;
+    }
+    return TCL_OK;
+}
+
+static int aws_sdk_tcl_s3_CreateMultipartUpload(Tcl_Interp *interp, const char *handle,
+        const char *bucket, const char *key, const char *content_type) {
+    auto *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        SetResult("handle not found");
+        return TCL_ERROR;
+    }
+    Aws::S3::Model::CreateMultipartUploadRequest request;
+    request.SetBucket(bucket);
+    request.SetKey(key);
+    if (content_type) {
+        request.SetContentType(content_type);
+    }
+    auto outcome = client->CreateMultipartUpload(request);
+    if (!outcome.IsSuccess()) {
+        SetResult(outcome.GetError().GetMessage().c_str());
+        return TCL_ERROR;
+    }
+    SetResult(outcome.GetResult().GetUploadId().c_str());
+    return TCL_OK;
+}
+
+static int aws_sdk_tcl_s3_UploadPartBody(Tcl_Interp *interp, Aws::S3::S3Client *client,
+        const char *bucket, const char *key, const char *upload_id, int part_number,
+        const std::shared_ptr<Aws::IOStream> &body, Tcl_WideInt size) {
+    if (!*body) {
+        SetResult("Error unable to buffer multipart upload part");
+        return TCL_ERROR;
+    }
+    Aws::S3::Model::UploadPartRequest request;
+    request.SetBucket(bucket);
+    request.SetKey(key);
+    request.SetUploadId(upload_id);
+    request.SetPartNumber(part_number);
+    request.SetContentLength(size);
+    request.SetBody(body);
+    auto outcome = client->UploadPart(request);
+    if (!outcome.IsSuccess()) {
+        SetResult(outcome.GetError().GetMessage().c_str());
+        return TCL_ERROR;
+    }
+    SetResult(outcome.GetResult().GetETag().c_str());
+    return TCL_OK;
+}
+
+static int aws_sdk_tcl_s3_UploadPart(Tcl_Interp *interp, const char *handle,
+        const char *bucket, const char *key, const char *upload_id,
+        Tcl_Obj *part_number_obj, Tcl_Obj *data_obj) {
+    auto *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        SetResult("handle not found");
+        return TCL_ERROR;
+    }
+    int part_number;
+    if (aws_sdk_tcl_s3_PartNumber(interp, part_number_obj, &part_number) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    Tcl_Size size;
+    const unsigned char *data = Tcl_GetByteArrayFromObj(data_obj, &size);
+    if (size > s3_max_part_size) {
+        SetResult("part data must not exceed 5 GiB");
+        return TCL_ERROR;
+    }
+    auto body = Aws::MakeShared<Aws::StringStream>("S3MultipartUpload");
+    body->write(reinterpret_cast<const char *>(data), size);
+    return aws_sdk_tcl_s3_UploadPartBody(interp, client, bucket, key, upload_id,
+            part_number, body, size);
+}
+
+static int aws_sdk_tcl_s3_CompleteMultipartUploadParts(Tcl_Interp *interp,
+        Aws::S3::S3Client *client, const char *bucket, const char *key,
+        const char *upload_id, const Aws::Vector<Aws::S3::Model::CompletedPart> &parts) {
+    Aws::S3::Model::CompletedMultipartUpload upload;
+    upload.SetParts(parts);
+    Aws::S3::Model::CompleteMultipartUploadRequest request;
+    request.SetBucket(bucket);
+    request.SetKey(key);
+    request.SetUploadId(upload_id);
+    request.SetMultipartUpload(upload);
+    auto outcome = client->CompleteMultipartUpload(request);
+    if (!outcome.IsSuccess()) {
+        SetResult(outcome.GetError().GetMessage().c_str());
+        return TCL_ERROR;
+    }
+    SetResult(outcome.GetResult().GetETag().c_str());
+    return TCL_OK;
+}
+
+static int aws_sdk_tcl_s3_CompleteMultipartUpload(Tcl_Interp *interp, const char *handle,
+        const char *bucket, const char *key, const char *upload_id, Tcl_Obj *parts_obj) {
+    auto *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        SetResult("handle not found");
+        return TCL_ERROR;
+    }
+    Tcl_Size count;
+    Tcl_Obj **elements;
+    if (Tcl_ListObjGetElements(interp, parts_obj, &count, &elements) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    if (count < 1 || count > s3_max_parts) {
+        SetResult("parts must contain between 1 and 10000 {part_number etag} pairs");
+        return TCL_ERROR;
+    }
+    Aws::Vector<Aws::S3::Model::CompletedPart> parts;
+    parts.reserve(count);
+    for (Tcl_Size i = 0; i < count; ++i) {
+        Tcl_Size pair_size;
+        Tcl_Obj **pair;
+        if (Tcl_ListObjGetElements(interp, elements[i], &pair_size, &pair) != TCL_OK) {
+            return TCL_ERROR;
+        }
+        if (pair_size != 2) {
+            SetResult("each part must be a {part_number etag} pair");
+            return TCL_ERROR;
+        }
+        int part_number;
+        if (aws_sdk_tcl_s3_PartNumber(interp, pair[0], &part_number) != TCL_OK) {
+            return TCL_ERROR;
+        }
+        const char *etag = Tcl_GetString(pair[1]);
+        if (!*etag) {
+            SetResult("part etag must not be empty");
+            return TCL_ERROR;
+        }
+        Aws::S3::Model::CompletedPart part;
+        part.SetPartNumber(part_number);
+        part.SetETag(etag);
+        parts.push_back(std::move(part));
+    }
+    std::sort(parts.begin(), parts.end(), [](const Aws::S3::Model::CompletedPart &a,
+            const Aws::S3::Model::CompletedPart &b) {
+        return a.GetPartNumber() < b.GetPartNumber();
+    });
+    for (size_t i = 1; i < parts.size(); ++i) {
+        if (parts[i - 1].GetPartNumber() == parts[i].GetPartNumber()) {
+            SetResult("duplicate part_number in parts");
+            return TCL_ERROR;
+        }
+    }
+    return aws_sdk_tcl_s3_CompleteMultipartUploadParts(interp, client, bucket, key,
+            upload_id, parts);
+}
+
+static int aws_sdk_tcl_s3_AbortMultipartUpload(Tcl_Interp *interp, const char *handle,
+        const char *bucket, const char *key, const char *upload_id) {
+    auto *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        SetResult("handle not found");
+        return TCL_ERROR;
+    }
+    Aws::S3::Model::AbortMultipartUploadRequest request;
+    request.SetBucket(bucket);
+    request.SetKey(key);
+    request.SetUploadId(upload_id);
+    auto outcome = client->AbortMultipartUpload(request);
+    if (!outcome.IsSuccess()) {
+        SetResult(outcome.GetError().GetMessage().c_str());
+        return TCL_ERROR;
+    }
+    Tcl_ResetResult(interp);
+    return TCL_OK;
+}
+
+static int aws_sdk_tcl_s3_PutMultipart(Tcl_Interp *interp, const char *handle,
+        const char *bucket, const char *key, const char *filename, Tcl_Obj *part_size_obj) {
+    auto *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
+    if (!client) {
+        SetResult("handle not found");
+        return TCL_ERROR;
+    }
+    Tcl_WideInt part_size = 8LL * 1024 * 1024;
+    if (part_size_obj && Tcl_GetWideIntFromObj(interp, part_size_obj, &part_size) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    if (part_size < s3_min_part_size || part_size > s3_max_part_size) {
+        SetResult("part_size must be between 5 MiB (5242880) and 5 GiB (5368709120)");
+        return TCL_ERROR;
+    }
+    std::ifstream input(filename, std::ios::binary | std::ios::ate);
+    if (!input || input.tellg() < 0) {
+        SetResult("Error unable to read file");
+        return TCL_ERROR;
+    }
+    const Tcl_WideInt file_size = static_cast<Tcl_WideInt>(input.tellg());
+    if (file_size / part_size + (file_size % part_size != 0) > s3_max_parts) {
+        SetResult("file requires more than 10000 parts; increase part_size");
+        return TCL_ERROR;
+    }
+    input.seekg(0);
+    if (!input) {
+        SetResult("Error unable to seek file");
+        return TCL_ERROR;
+    }
+    if (aws_sdk_tcl_s3_CreateMultipartUpload(interp, handle, bucket, key, nullptr) != TCL_OK) {
+        return TCL_ERROR;
+    }
+    const Aws::String upload_id = Tcl_GetStringResult(interp);
+    // Preserve the original failure, and include the upload ID if cleanup also fails.
+    auto abort_on_error = [&]() {
+        const Aws::String error = Tcl_GetStringResult(interp);
+        if (aws_sdk_tcl_s3_AbortMultipartUpload(interp, handle, bucket, key, upload_id.c_str()) != TCL_OK) {
+            Tcl_SetObjResult(interp, Tcl_ObjPrintf("%s; failed to abort multipart upload %s: %s",
+                    error.c_str(), upload_id.c_str(), Tcl_GetStringResult(interp)));
+        } else {
+            SetResult(error.c_str());
+        }
+        return TCL_ERROR;
+    };
+    try {
+        Aws::Vector<Aws::S3::Model::CompletedPart> parts;
+        Tcl_WideInt remaining = file_size;
+        // A zero-byte file still needs one (empty) final part.
+        do {
+            const Tcl_WideInt size = std::min(part_size, remaining);
+            auto body = Aws::MakeShared<Aws::StringStream>("S3MultipartUpload");
+            char buffer[64 * 1024];
+            for (Tcl_WideInt copied = 0; copied < size;) {
+                const auto chunk = static_cast<std::streamsize>(
+                        std::min<Tcl_WideInt>(sizeof(buffer), size - copied));
+                if (!input.read(buffer, chunk)) {
+                    SetResult("Error unable to read file during multipart upload");
+                    return abort_on_error();
+                }
+                body->write(buffer, chunk);
+                copied += chunk;
+            }
+            const int number = static_cast<int>(parts.size()) + 1;
+            if (aws_sdk_tcl_s3_UploadPartBody(interp, client, bucket, key, upload_id.c_str(),
+                    number, body, size) != TCL_OK) {
+                return abort_on_error();
+            }
+            Aws::S3::Model::CompletedPart part;
+            part.SetPartNumber(number);
+            part.SetETag(Tcl_GetStringResult(interp));
+            parts.push_back(std::move(part));
+            remaining -= size;
+        } while (remaining > 0);
+        if (aws_sdk_tcl_s3_CompleteMultipartUploadParts(interp, client, bucket, key,
+                upload_id.c_str(), parts) != TCL_OK) {
+            return abort_on_error();
+        }
+        return TCL_OK;
+    } catch (const std::exception &error) {
+        SetResult(error.what());
+        return abort_on_error();
     }
 }
 
@@ -569,6 +846,11 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
             "exists_bucket",
             "list_buckets",
             "generate_presigned_url",
+            "put_multipart",
+            "create_multipart_upload",
+            "upload_part",
+            "complete_multipart_upload",
+            "abort_multipart_upload",
             nullptr
     };
 
@@ -585,7 +867,12 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
         m_deleteBucket,
         m_existsBucket,
         m_listBuckets,
-        m_generatePresignedUrl
+        m_generatePresignedUrl,
+        m_putMultipart,
+        m_createMultipartUpload,
+        m_uploadPart,
+        m_completeMultipartUpload,
+        m_abortMultipartUpload
     };
 
     if (objc < 2) {
@@ -633,6 +920,30 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                         Tcl_GetString(objv[3]),
                         Tcl_GetString(objv[4])
                 );
+            case m_putMultipart:
+                CheckArgs(5,6,2,"bucket key filename ?part_size?");
+                return aws_sdk_tcl_s3_PutMultipart(interp, handle,
+                        Tcl_GetString(objv[2]), Tcl_GetString(objv[3]),
+                        Tcl_GetString(objv[4]), objc == 6 ? objv[5] : nullptr);
+            case m_createMultipartUpload:
+                CheckArgs(4,5,2,"bucket key ?content_type?");
+                return aws_sdk_tcl_s3_CreateMultipartUpload(interp, handle,
+                        Tcl_GetString(objv[2]), Tcl_GetString(objv[3]),
+                        objc == 5 ? Tcl_GetString(objv[4]) : nullptr);
+            case m_uploadPart:
+                CheckArgs(7,7,2,"bucket key upload_id part_number data");
+                return aws_sdk_tcl_s3_UploadPart(interp, handle,
+                        Tcl_GetString(objv[2]), Tcl_GetString(objv[3]),
+                        Tcl_GetString(objv[4]), objv[5], objv[6]);
+            case m_completeMultipartUpload:
+                CheckArgs(6,6,2,"bucket key upload_id parts");
+                return aws_sdk_tcl_s3_CompleteMultipartUpload(interp, handle,
+                        Tcl_GetString(objv[2]), Tcl_GetString(objv[3]),
+                        Tcl_GetString(objv[4]), objv[5]);
+            case m_abortMultipartUpload:
+                CheckArgs(5,5,2,"bucket key upload_id");
+                return aws_sdk_tcl_s3_AbortMultipartUpload(interp, handle,
+                        Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]));
             case m_get:
                 DBG(fprintf(stderr, "GetMethod\n"));
                 CheckArgs(4,5,1,"get bucket prefix ?filename?");
@@ -795,6 +1106,37 @@ static int aws_sdk_tcl_s3_PutChannelCmd(ClientData  clientData, Tcl_Interp *inte
     return aws_sdk_tcl_s3_PutChannel(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]));
 }
 
+static int aws_sdk_tcl_s3_PutMultipartCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    CheckArgs(5,6,1,"handle bucket key filename ?part_size?");
+    return aws_sdk_tcl_s3_PutMultipart(interp, Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]),
+            objc == 6 ? objv[5] : nullptr);
+}
+
+static int aws_sdk_tcl_s3_CreateMultipartUploadCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    CheckArgs(4,5,1,"handle bucket key ?content_type?");
+    return aws_sdk_tcl_s3_CreateMultipartUpload(interp, Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), objc == 5 ? Tcl_GetString(objv[4]) : nullptr);
+}
+
+static int aws_sdk_tcl_s3_UploadPartCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    CheckArgs(7,7,1,"handle bucket key upload_id part_number data");
+    return aws_sdk_tcl_s3_UploadPart(interp, Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]), objv[5], objv[6]);
+}
+
+static int aws_sdk_tcl_s3_CompleteMultipartUploadCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    CheckArgs(6,6,1,"handle bucket key upload_id parts");
+    return aws_sdk_tcl_s3_CompleteMultipartUpload(interp, Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]), objv[5]);
+}
+
+static int aws_sdk_tcl_s3_AbortMultipartUploadCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    CheckArgs(5,5,1,"handle bucket key upload_id");
+    return aws_sdk_tcl_s3_AbortMultipartUpload(interp, Tcl_GetString(objv[1]),
+            Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]));
+}
+
 static int aws_sdk_tcl_s3_GetCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
     DBG(fprintf(stderr, "GetCmd\n"));
     CheckArgs(4,5,1,"handle_name bucket key ?filename?");
@@ -935,6 +1277,11 @@ int Aws_sdk_tcl_s3_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::s3::ls", aws_sdk_tcl_s3_ListCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::put_text", aws_sdk_tcl_s3_PutTextCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::put", aws_sdk_tcl_s3_PutChannelCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::put_multipart", aws_sdk_tcl_s3_PutMultipartCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::create_multipart_upload", aws_sdk_tcl_s3_CreateMultipartUploadCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::upload_part", aws_sdk_tcl_s3_UploadPartCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::complete_multipart_upload", aws_sdk_tcl_s3_CompleteMultipartUploadCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::s3::abort_multipart_upload", aws_sdk_tcl_s3_AbortMultipartUploadCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::get", aws_sdk_tcl_s3_GetCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::delete", aws_sdk_tcl_s3_DeleteCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::s3::batch_delete", aws_sdk_tcl_s3_BatchDeleteCmd, nullptr, nullptr);

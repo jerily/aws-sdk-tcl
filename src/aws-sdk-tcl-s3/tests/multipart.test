@@ -1,0 +1,163 @@
+package require tcltest 2
+namespace import ::tcltest::test
+lassign $argv library endpoint directory
+set argv {}
+load $library Aws_sdk_tcl_s3
+set client [::aws::s3::create [dict create region us-east-1 endpoint $endpoint \
+    aws_access_key_id test aws_secret_access_key test]]
+
+proc invoke {api method args} {
+    if {$api eq "object"} {
+        return [$::client $method {*}$args]
+    }
+    return [::aws::s3::$method $::client {*}$args]
+}
+
+proc download {key} {
+    set filename [file join $::directory download]
+    file delete -force $filename
+    $::client get test-bucket $key $filename
+    set channel [open $filename rb]
+    try {
+        return [read $channel]
+    } finally {
+        close $channel
+    }
+}
+
+set first [binary format H* 00ff80fe010d0a]
+set part [string repeat $first 748983]
+set part [string range $part 0 5242879]
+set data "${part}${part}${first}"
+set filename [file join $directory input.bin]
+set channel [open $filename wb]
+puts -nonewline $channel $data
+close $channel
+set empty [file join $directory empty.bin]
+close [open $empty wb]
+set oversized [file join $directory oversized.bin]
+set channel [open $oversized wb]
+seek $channel [expr {10000 * 5242880}]
+puts -nonewline $channel x
+close $channel
+
+test version-1.0 {extension version was bumped} -body {
+    package present awss3
+} -result 1.0.11
+
+foreach api {object namespace} {
+    test multipart-$api-1 {manual upload preserves binary bytes and sorts ETags} -body {
+        set key $api-manual
+        set id [invoke $api create_multipart_upload test-bucket $key application/octet-stream]
+        set e2 [invoke $api upload_part test-bucket $key $id 2 $first]
+        set e1 [invoke $api upload_part test-bucket $key $id 1 $part]
+        set result [invoke $api complete_multipart_upload test-bucket $key $id \
+            [list [list 2 $e2] [list 1 $e1]]]
+        list $result [expr {[download $key] eq "${part}${first}"}]
+    } -result {{"complete-etag"} 1}
+
+    test multipart-$api-2 {file helper uploads multiple parts and a short final part} -body {
+        set result [invoke $api put_multipart test-bucket $api-auto $filename 5242880]
+        list $result [expr {[download $api-auto] eq $data}]
+    } -result {{"complete-etag"} 1}
+
+    test multipart-$api-3 {default part size} -body {
+        set result [invoke $api put_multipart test-bucket $api-default $filename]
+        list $result [expr {[download $api-default] eq $data}]
+    } -result {{"complete-etag"} 1}
+
+    test multipart-$api-4 {empty file is uploaded} -body {
+        invoke $api put_multipart test-bucket $api-empty $empty
+        string length [download $api-empty]
+    } -result 0
+
+    test multipart-$api-5 {manual abort returns an empty result} -body {
+        set id [invoke $api create_multipart_upload test-bucket $api-manual-abort]
+        invoke $api abort_multipart_upload test-bucket $api-manual-abort $id
+    } -result {}
+
+    test multipart-$api-boundary {largest part number and replacing an uploaded part} -body {
+        set key $api-boundary
+        set id [invoke $api create_multipart_upload test-bucket $key]
+        invoke $api upload_part test-bucket $key $id 10000 original
+        set etag [invoke $api upload_part test-bucket $key $id 10000 $first]
+        invoke $api complete_multipart_upload test-bucket $key $id [list [list 10000 $etag]]
+        expr {[download $key] eq $first}
+    } -result 1
+
+    test multipart-$api-exact {an exact part boundary does not add an empty part} -body {
+        set exact [file join $directory exact.bin]
+        set channel [open $exact wb]
+        puts -nonewline $channel $part
+        close $channel
+        invoke $api put_multipart test-bucket $api-exact $exact 5242880
+        expr {[download $api-exact] eq $part}
+    } -result 1
+
+    test multipart-$api-read-error {a file truncated during upload triggers abort} -setup {
+        set truncated [file join $directory read-error.bin]
+        file copy -force $filename $truncated
+    } -body {
+        invoke $api put_multipart test-bucket $api-read-error $truncated
+    } -returnCodes error -result {Error unable to read file during multipart upload}
+
+    test multipart-$api-count {too many parts fails before initiation} -body {
+        invoke $api put_multipart test-bucket invalid $oversized 5242880
+    } -returnCodes error -result {file requires more than 10000 parts; increase part_size}
+
+    foreach {kind message} {
+        create-error {*injected create failure*}
+        part-error {*injected part failure*}
+        complete-error {*injected completion failure*}
+        abort-error {*injected part failure*failed to abort multipart upload upload*injected abort failure*}
+    } {
+        test multipart-$api-$kind {service errors propagate and automatic cleanup is attempted} -body {
+            invoke $api put_multipart test-bucket $api-$kind $filename
+        } -returnCodes error -match glob -result $message
+    }
+
+    foreach number {0 10001 -1 not-an-integer 999999999999999999999} {
+        test multipart-$api-number-$number {invalid part number fails before a request} -body {
+            invoke $api upload_part test-bucket invalid id $number $first
+        } -returnCodes error -match glob -result {*}
+    }
+    foreach size {0 -1 5242879 5368709121 not-an-integer} {
+        test multipart-$api-size-$size {invalid part size fails before a request} -body {
+            invoke $api put_multipart test-bucket invalid $filename $size
+        } -returnCodes error -match glob -result {*}
+    }
+    foreach parts [list {} {{1 a} {1 b}} {{0 a}} {{10001 a}} {{1 {}}} {{1}} {{1 a extra}} "\{"] {
+        test multipart-$api-parts-[incr case_number] {invalid completion list fails locally} -body {
+            invoke $api complete_multipart_upload test-bucket invalid id $parts
+        } -returnCodes error -match glob -result {*}
+    }
+    test multipart-$api-missing {missing file does not initiate an upload} -body {
+        invoke $api put_multipart test-bucket invalid [file join $directory missing]
+    } -returnCodes error -result {Error unable to read file}
+
+    foreach method {put_multipart create_multipart_upload upload_part complete_multipart_upload abort_multipart_upload} {
+        test multipart-$api-arity-$method {too few arguments} -body {
+            invoke $api $method
+        } -returnCodes error -match glob -result {wrong # args:*}
+        test multipart-$api-extra-$method {too many arguments} -body {
+            invoke $api $method a b c d e f g h
+        } -returnCodes error -match glob -result {wrong # args:*}
+    }
+}
+
+foreach {method arguments} {
+    put_multipart {bucket key filename}
+    create_multipart_upload {bucket key}
+    upload_part {bucket key id 1 data}
+    complete_multipart_upload {bucket key id {{1 etag}}}
+    abort_multipart_upload {bucket key id}
+} {
+    test multipart-handle-$method {unknown handles fail locally} -body {
+        ::aws::s3::$method missing {*}$arguments
+    } -returnCodes error -result {handle not found}
+}
+
+$client destroy
+set failed $::tcltest::numTests(Failed)
+::tcltest::cleanupTests
+exit [expr {$failed > 0}]

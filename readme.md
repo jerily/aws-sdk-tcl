@@ -41,9 +41,9 @@ cmake --install . --config=Release
 
 ### Download the latest release
 ```bash
-wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.10.tar.gz
-tar -xzf v1.0.10.tar.gz
-export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.10
+wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.11.tar.gz
+tar -xzf v1.0.11.tar.gz
+export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.11
 ```
 
 ### Build for TCL:
