@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl LANGUAGES CXX C)
+project(aws-sdk-tcl VERSION 1.0.11 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(CMAKE_C_STANDARD   11)
