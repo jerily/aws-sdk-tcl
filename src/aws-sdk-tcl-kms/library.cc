@@ -636,7 +636,7 @@ static int aws_sdk_tcl_kms_CreateCmd(ClientData  clientData, Tcl_Interp *interp,
 
     auto *client = credentials_provider_ptr != nullptr ?
         new Aws::KMS::KMSClient(credentials_provider_ptr,
-            Aws::MakeShared<Aws::KMS::KMSEndpointProvider>(Aws::KMS::KMSClient::ALLOCATION_TAG),
+            Aws::MakeShared<Aws::KMS::KMSEndpointProvider>("aws-sdk-tcl-kms"),
             client_config) :
         new Aws::KMS::KMSClient(client_config);
 

@@ -1,12 +1,12 @@
 {
   "name": "aws-sdk-tcl",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "scripts": {
 
   },
   "dependencies": {
     "tcl": "^9.0.0-beta.2",
-    "aws-sdk-cpp": "^1.11.157"
+    "aws-sdk-cpp": "^1.11.921"
   },
   "devDependencies": {
 
@@ -15,7 +15,7 @@
     "default": [
       {
         "cmd": "download",
-        "url": "https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.11.tar.gz"
+        "url": "https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.12.tar.gz"
       },
       {
         "cmd": "unpack"
