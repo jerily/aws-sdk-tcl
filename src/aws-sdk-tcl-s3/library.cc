@@ -1052,7 +1052,7 @@ static int aws_sdk_tcl_s3_CreateCmd(ClientData  clientData, Tcl_Interp *interp, 
     Aws::Client::ClientConfiguration client_config = std::get<1>(result);
     std::shared_ptr<Aws::Auth::AWSCredentialsProvider> credentials_provider_ptr = std::get<2>(result);
 
-    auto *client = credentials_provider_ptr != nullptr ? new Aws::S3::S3Client(credentials_provider_ptr, Aws::MakeShared<Aws::S3::S3EndpointProvider>(Aws::S3::S3Client::ALLOCATION_TAG), client_config) : new Aws::S3::S3Client(client_config);
+    auto *client = credentials_provider_ptr != nullptr ? new Aws::S3::S3Client(credentials_provider_ptr, Aws::MakeShared<Aws::S3::S3EndpointProvider>("aws-sdk-tcl-s3"), client_config) : new Aws::S3::S3Client(client_config);
     char handle[80];
     CMD_NAME(handle, client);
     aws_sdk_tcl_s3_RegisterName(handle, client);

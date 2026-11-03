@@ -2,6 +2,10 @@
 
 TCL bindings for the AWS SDK C++. Use them in TCL or NaviServer as loadable modules.
 
+Version 1.0.12 builds with AWS SDK C++ 1.11.921. S3 and KMS use module-owned
+allocation tags instead of the removed client `ALLOCATION_TAG` members. Client
+construction and credential-provider behavior remain unchanged.
+
 ## Build Dependencies
 
 ### AWS SDK C++ Dependencies
@@ -23,7 +27,7 @@ brew install openssl@3
 
 ### AWS SDK C++ Build
 ```bash
-git clone --depth 1 --branch 1.11.157 --recurse-submodules --shallow-submodules https://github.com/aws/aws-sdk-cpp
+git clone --depth 1 --branch 1.11.921 --recurse-submodules --shallow-submodules https://github.com/aws/aws-sdk-cpp
 cd aws-sdk-cpp
 mkdir build
 cd build
@@ -41,9 +45,9 @@ cmake --install . --config=Release
 
 ### Download the latest release
 ```bash
-wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.11.tar.gz
-tar -xzf v1.0.11.tar.gz
-export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.11
+wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.12.tar.gz
+tar -xzf v1.0.12.tar.gz
+export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.12
 ```
 
 ### Build for TCL:

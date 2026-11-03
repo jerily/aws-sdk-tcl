@@ -132,7 +132,9 @@ def main():
     parser.add_argument("--library", required=True, type=Path)
     parser.add_argument("--tclsh", default="tclsh")
     args = parser.parse_args()
-    env = dict(os.environ, AWS_EC2_METADATA_DISABLED="true")
+    # This fixture implements multipart bodies, without optional checksum trailers.
+    env = dict(os.environ, AWS_EC2_METADATA_DISABLED="true",
+               AWS_REQUEST_CHECKSUM_CALCULATION="when_required")
     with ThreadingHTTPServer(("127.0.0.1", 0), S3Handler) as server:
         server.requests, server.uploads, server.objects = [], {}, {}
         thread = threading.Thread(target=server.serve_forever, daemon=True)
