@@ -1,3 +1,5 @@
+if {![package vsatisfies [package provide Tcl] @TCL_PACKAGE_REQUIREMENT@]} {return}
+
 set dir [file dirname [info script]]
 
 package ifneeded awsdynamodb @PROJECT_VERSION@ [list load [file join $dir libaws-sdk-tcl-dynamodb[info sharedlibextension]] Aws_sdk_tcl_dynamodb]

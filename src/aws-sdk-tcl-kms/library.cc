@@ -785,7 +785,7 @@ void aws_sdk_tcl_kms_InitModule() {
 int Aws_sdk_tcl_kms_Init(Tcl_Interp *interp) {
 
     if (Tcl_InitStubs(interp, MIN_VERSION, 0) == nullptr) {
-        SetResult("Tcl_InitStubs failed");
+        // Tcl_InitStubs sets the error; the stub table is unavailable on failure.
         return TCL_ERROR;
     }
 
