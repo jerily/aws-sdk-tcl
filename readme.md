@@ -2,9 +2,9 @@
 
 TCL bindings for the AWS SDK C++. Use them in TCL or NaviServer as loadable modules.
 
-Version 1.0.12 builds with AWS SDK C++ 1.11.921. S3 and KMS use module-owned
-allocation tags instead of the removed client `ALLOCATION_TAG` members. Client
-construction and credential-provider behavior remain unchanged.
+Version 1.0.13 supports Tcl 8.6 and Tcl 9.x through Tcl stubs, including automatic
+Tcl 9.1 discovery. All seven modules link against the matching stub archive.
+The extension builds with AWS SDK C++ 1.11.921.
 
 ## Build Dependencies
 
@@ -45,12 +45,19 @@ cmake --install . --config=Release
 
 ### Download the latest release
 ```bash
-wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.12.tar.gz
-tar -xzf v1.0.12.tar.gz
-export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.12
+wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.13.tar.gz
+tar -xzf v1.0.13.tar.gz
+export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.13
 ```
 
 ### Build for TCL:
+
+Shared modules use Tcl stubs and support Tcl 8.6 and Tcl 9.x, including 9.1.
+Build separately against the headers for each Tcl major version. The finder
+reads the header version and selects the matching stub archive, so a shared Tcl
+runtime library is not needed at link time. Install the Tcl development package
+containing `tcl.h` and the stub archive.
+
 ```bash
 cd ${TCL_AWS_DIR}
 mkdir build
@@ -62,6 +69,27 @@ cmake .. -DAWS_SDK_CPP_DIR=/usr/local
 make
 make install
 ```
+
+For a custom Tcl installation, set `TCL_INCLUDE_DIR` and `TCL_LIBRARY_DIR`, or
+provide `TCL_INCLUDE_PATH` and `TCL_STUB_LIBRARY` explicitly. Tcl 8.6 normally
+uses `libtclstub8.6.a`; Tcl 9 normally uses `libtclstub.a`. `CMAKE_PREFIX_PATH`
+is also supported. For example, to build against Tcl 8.6 on Debian/Ubuntu:
+
+```bash
+cmake -S . -B build86 -DAWS_SDK_CPP_DIR=/usr/local \
+  -DTCL_INCLUDE_DIR=/usr/include/tcl8.6 \
+  -DTCL_LIBRARY_DIR=/usr/lib/x86_64-linux-gnu \
+  -DTCL_TCLSH=/usr/bin/tclsh8.6
+cmake --build build86 --parallel 2
+ctest --test-dir build86 --output-on-failure
+```
+
+The tests load all seven modules, construct and destroy clients with dummy
+credentials, sign an S3 URL, and convert DynamoDB values without AWS requests.
+Linux tests also check that the modules have no direct Tcl runtime dependency.
+Set `TCL_TCLSH` to the matching interpreter for testing, or use
+`-DBUILD_TESTING=OFF` to build without an interpreter. Package indexes reject
+the wrong Tcl major version before loading the module.
 
 ### Build for NaviServer:
 ```bash
