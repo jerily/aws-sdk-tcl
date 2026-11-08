@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl VERSION 1.0.13 LANGUAGES CXX C)
+project(aws-sdk-tcl VERSION 1.0.14 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(CMAKE_C_STANDARD   11)
@@ -16,22 +16,35 @@ else()
     set(TCL_PACKAGE_REQUIREMENT "9.0-10")
 endif()
 
-#set(CMAKE_VERBOSE_MAKEFILE ON)
+set(AWS_SDK_TCL_VERSION ${PROJECT_VERSION})
+set(AWS_SDK_TCL_SUPPORTED_SERVICES s3 dynamodb lambda iam sqs ssm kms)
+set(AWS_SDK_TCL_SERVICES "${AWS_SDK_TCL_SUPPORTED_SERVICES}" CACHE STRING
+    "Semicolon-separated AWS service bindings to build")
+if(NOT AWS_SDK_TCL_SERVICES)
+    message(FATAL_ERROR "AWS_SDK_TCL_SERVICES must select at least one service")
+endif()
+list(REMOVE_DUPLICATES AWS_SDK_TCL_SERVICES)
+foreach(service IN LISTS AWS_SDK_TCL_SERVICES)
+    if(NOT service IN_LIST AWS_SDK_TCL_SUPPORTED_SERVICES)
+        message(FATAL_ERROR "Unsupported AWS SDK Tcl service: ${service}")
+    endif()
+endforeach()
+if(AWS_SDK_CPP_DIR)
+    list(PREPEND CMAKE_PREFIX_PATH "${AWS_SDK_CPP_DIR}")
+endif()
+find_package(AWSSDK REQUIRED COMPONENTS ${AWS_SDK_TCL_SERVICES})
+
 set(TOPLEVEL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
-add_subdirectory(src/aws-sdk-tcl-s3)
-add_subdirectory(src/aws-sdk-tcl-dynamodb)
-add_subdirectory(src/aws-sdk-tcl-lambda)
-add_subdirectory(src/aws-sdk-tcl-iam)
-add_subdirectory(src/aws-sdk-tcl-sqs)
-add_subdirectory(src/aws-sdk-tcl-ssm)
-add_subdirectory(src/aws-sdk-tcl-kms)
+foreach(service IN LISTS AWS_SDK_TCL_SERVICES)
+    add_subdirectory(src/aws-sdk-tcl-${service})
+endforeach()
 
 include(CTest)
 if(BUILD_TESTING)
     if(NOT TCL_TCLSH)
         message(FATAL_ERROR "Set TCL_TCLSH to a matching Tcl interpreter, or disable BUILD_TESTING")
     endif()
-    foreach(service s3 dynamodb lambda sqs iam ssm kms all)
+    foreach(service IN LISTS AWS_SDK_TCL_SERVICES)
         add_test(NAME load_${service} COMMAND "${TCL_TCLSH}"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/load.tcl"
             "${CMAKE_CURRENT_BINARY_DIR}/src" "${PROJECT_VERSION}"
@@ -39,9 +52,15 @@ if(BUILD_TESTING)
         set_tests_properties(load_${service} PROPERTIES
             ENVIRONMENT "AWS_EC2_METADATA_DISABLED=true" TIMEOUT 30)
     endforeach()
+    add_test(NAME load_selected COMMAND "${TCL_TCLSH}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/load.tcl"
+        "${CMAKE_CURRENT_BINARY_DIR}/src" "${PROJECT_VERSION}"
+        "${TCL_ABI_VERSION}" ${AWS_SDK_TCL_SERVICES})
+    set_tests_properties(load_selected PROPERTIES
+        ENVIRONMENT "AWS_EC2_METADATA_DISABLED=true" TIMEOUT 30)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_READELF AND CMAKE_NM)
         set(module_libraries)
-        foreach(service s3 dynamodb lambda sqs iam ssm kms)
+        foreach(service IN LISTS AWS_SDK_TCL_SERVICES)
             list(APPEND module_libraries "$<TARGET_FILE:aws-sdk-tcl-${service}>")
         endforeach()
         add_test(NAME tcl_stubs COMMAND "${CMAKE_COMMAND}"

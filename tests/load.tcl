@@ -3,9 +3,13 @@ lassign $argv root expected_version expected_abi service
 if {[info tclversion] ne $expected_abi} {
     error "test interpreter [info patchlevel] does not match headers $expected_abi"
 }
-set services [expr {$service eq "all" ? {s3 dynamodb lambda sqs iam ssm kms} : [list $service]}]
+set services [expr {$service eq "all" ? {s3 dynamodb lambda sqs iam ssm kms} : [lrange $argv 3 end]}]
+set module_paths {}
 foreach service $services {
-    lappend auto_path [file join $root aws-sdk-tcl-$service]
+    lappend module_paths [file join $root aws-sdk-tcl-$service]
+}
+set auto_path [concat $module_paths $auto_path]
+foreach service $services {
     set package aws$service
     if {[package require $package] ne $expected_version} {error "incorrect $package version"}
     set expected_library [file normalize [file join $root aws-sdk-tcl-$service libaws-sdk-tcl-$service[info sharedlibextension]]]
