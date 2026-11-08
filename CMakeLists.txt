@@ -32,6 +32,8 @@ endforeach()
 if(AWS_SDK_CPP_DIR)
     list(PREPEND CMAKE_PREFIX_PATH "${AWS_SDK_CPP_DIR}")
 endif()
+# The unmodified SDK core exports ZLIB::ZLIB for static request compression.
+find_package(ZLIB REQUIRED)
 find_package(AWSSDK REQUIRED COMPONENTS ${AWS_SDK_TCL_SERVICES})
 
 set(TOPLEVEL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
