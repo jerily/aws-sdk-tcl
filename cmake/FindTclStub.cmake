@@ -32,11 +32,11 @@ if(TCL_VERSION MATCHES "^([89])\\.([0-9]+)")
     endif()
     if(TCL_LIBRARY_DIR)
         # An explicit installation must not silently fall back to a host library.
-        find_library(TCL_STUB_LIBRARY NAMES ${tcl_stub_names}
+        find_library(TCL_STUB_LIBRARY NAMES ${tcl_stub_names} NAMES_PER_DIR
             PATHS "${TCL_LIBRARY_DIR}" PATH_SUFFIXES tcl${TCL_ABI_VERSION}
             NO_DEFAULT_PATH)
     else()
-        find_library(TCL_STUB_LIBRARY NAMES ${tcl_stub_names}
+        find_library(TCL_STUB_LIBRARY NAMES ${tcl_stub_names} NAMES_PER_DIR
             HINTS "${tcl_prefix}/lib" "${tcl_prefix}/lib64"
             PATH_SUFFIXES tcl${TCL_ABI_VERSION})
     endif()
