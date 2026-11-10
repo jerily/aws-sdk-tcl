@@ -2,9 +2,11 @@
 
 TCL bindings for the AWS SDK C++. Use them in TCL or NaviServer as loadable modules.
 
-Version 1.0.13 supports Tcl 8.6 and Tcl 9.x through Tcl stubs, including automatic
-Tcl 9.1 discovery. All seven modules link against the matching stub archive.
-The extension builds with AWS SDK C++ 1.11.921.
+Version 1.0.16 supports Tcl 8.6 and Tcl 9.x through Tcl stubs, including automatic
+Tcl 9.1 discovery. All eight modules link against the matching stub archive.
+The extension builds with AWS SDK C++ 1.11.924. SES support is documented in
+[the SES reference](src/aws-sdk-tcl-ses/readme.md), with a
+[send-email example](examples/ses.tcl).
 
 ## Build Dependencies
 
@@ -27,14 +29,14 @@ brew install openssl@3
 
 ### AWS SDK C++ Build
 ```bash
-git clone --depth 1 --branch 1.11.921 --recurse-submodules --shallow-submodules https://github.com/aws/aws-sdk-cpp
+git clone --depth 1 --branch 1.11.924 --recurse-submodules --shallow-submodules https://github.com/aws/aws-sdk-cpp
 cd aws-sdk-cpp
 mkdir build
 cd build
 cmake .. \
   -DBUILD_SHARED_LIBS=ON \
   -DCMAKE_BUILD_TYPE=Release \
-  -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm;kms" \
+  -DBUILD_ONLY="s3;dynamodb;lambda;sqs;iam;transfer;sts;ssm;kms;email" \
   -DENABLE_TESTING=OFF \
   -DAUTORUN_UNIT_TESTS=OFF
 cmake --build . --config=Release
@@ -45,9 +47,9 @@ cmake --install . --config=Release
 
 ### Download the latest release
 ```bash
-wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.13.tar.gz
-tar -xzf v1.0.13.tar.gz
-export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.13
+wget https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.16.tar.gz
+tar -xzf v1.0.16.tar.gz
+export TCL_AWS_DIR=$(pwd)/aws-sdk-tcl-1.0.16
 ```
 
 ### Build for TCL:
@@ -84,7 +86,7 @@ cmake --build build86 --parallel 2
 ctest --test-dir build86 --output-on-failure
 ```
 
-The tests load all seven modules, construct and destroy clients with dummy
+The tests load all selected modules, construct and destroy clients with dummy
 credentials, sign an S3 URL, and convert DynamoDB values without AWS requests.
 Linux tests also check that the modules have no direct Tcl runtime dependency.
 Set `TCL_TCLSH` to the matching interpreter for testing, or use

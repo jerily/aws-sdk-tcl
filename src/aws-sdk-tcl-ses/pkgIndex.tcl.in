@@ -1,0 +1,2 @@
+if {![package vsatisfies [package provide Tcl] @TCL_PACKAGE_REQUIREMENT@]} {return}
+package ifneeded awsses @PROJECT_VERSION@ [list load [file join $dir libaws-sdk-tcl-ses[info sharedlibextension]] Aws_sdk_tcl_ses]

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl VERSION 1.0.15 LANGUAGES CXX C)
+project(aws-sdk-tcl VERSION 1.0.16 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(CMAKE_C_STANDARD   11)
@@ -17,7 +17,7 @@ else()
 endif()
 
 set(AWS_SDK_TCL_VERSION ${PROJECT_VERSION})
-set(AWS_SDK_TCL_SUPPORTED_SERVICES s3 dynamodb lambda iam sqs ssm kms)
+set(AWS_SDK_TCL_SUPPORTED_SERVICES s3 dynamodb lambda iam sqs ssm kms ses)
 set(AWS_SDK_TCL_SERVICES "${AWS_SDK_TCL_SUPPORTED_SERVICES}" CACHE STRING
     "Semicolon-separated AWS service bindings to build")
 if(NOT AWS_SDK_TCL_SERVICES)
@@ -34,7 +34,10 @@ if(AWS_SDK_CPP_DIR)
 endif()
 # The unmodified SDK core exports ZLIB::ZLIB for static request compression.
 find_package(ZLIB REQUIRED)
-find_package(AWSSDK REQUIRED COMPONENTS ${AWS_SDK_TCL_SERVICES})
+set(AWS_SDK_CPP_COMPONENTS ${AWS_SDK_TCL_SERVICES})
+# The SES classic API is named "email" in the upstream C++ SDK.
+list(TRANSFORM AWS_SDK_CPP_COMPONENTS REPLACE "^ses$" "email")
+find_package(AWSSDK REQUIRED COMPONENTS ${AWS_SDK_CPP_COMPONENTS})
 
 set(TOPLEVEL_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 foreach(service IN LISTS AWS_SDK_TCL_SERVICES)
@@ -60,6 +63,13 @@ if(BUILD_TESTING)
         "${TCL_ABI_VERSION}" ${AWS_SDK_TCL_SERVICES})
     set_tests_properties(load_selected PROPERTIES
         ENVIRONMENT "AWS_EC2_METADATA_DISABLED=true" TIMEOUT 30)
+    if("ses" IN_LIST AWS_SDK_TCL_SERVICES)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME ses_requests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/aws-sdk-tcl-ses/tests/ses_server.py"
+            --library "$<TARGET_FILE:aws-sdk-tcl-ses>" --tclsh "${TCL_TCLSH}")
+        set_tests_properties(ses_requests PROPERTIES TIMEOUT 120)
+    endif()
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_READELF AND CMAKE_NM)
         set(module_libraries)
         foreach(service IN LISTS AWS_SDK_TCL_SERVICES)

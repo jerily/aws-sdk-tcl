@@ -3,7 +3,7 @@ lassign $argv root expected_version expected_abi service
 if {[info tclversion] ne $expected_abi} {
     error "test interpreter [info patchlevel] does not match headers $expected_abi"
 }
-set services [expr {$service eq "all" ? {s3 dynamodb lambda sqs iam ssm kms} : [lrange $argv 3 end]}]
+set services [expr {$service eq "all" ? {s3 dynamodb lambda sqs iam ssm kms ses} : [lrange $argv 3 end]}]
 set module_paths {}
 foreach service $services {
     lappend module_paths [file join $root aws-sdk-tcl-$service]
