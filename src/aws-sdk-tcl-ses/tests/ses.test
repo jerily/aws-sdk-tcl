@@ -1,0 +1,181 @@
+package require tcltest 2
+namespace import ::tcltest::test
+lassign $argv library endpoint
+set argv {}
+load $library Aws_sdk_tcl_ses
+set config [dict create region us-east-1 endpoint $endpoint aws_access_key_id test aws_secret_access_key test]
+set client [::aws::ses::create $config]
+proc invoke {api method args} {
+    if {$api eq "object"} {return [$::client $method {*}$args]}
+    return [::aws::ses::$method $::client {*}$args]
+}
+set face [encoding convertfrom utf-8 [binary format H* f09f9880]]
+set envelope [dict create from sender@example.com to {first@example.com second@example.com} \
+    cc cc@example.com bcc bcc@example.com reply_to reply@example.com return_path bounce@example.com \
+    source_arn source-arn return_path_arn return-arn configuration_set events tags {purpose test}]
+set message [dict merge $envelope [dict create subject "Hello café $face & +" \
+    text "plain café $face\nsecond line" html "<b>café $face</b>"]]
+set json "{\"name\":\"café $face\"}"
+set template [dict create name welcome subject {Hello {{name}}} text {plain {{name}}} html {<b>{{name}}</b>}]
+set raw [binary format a* "From: sender@example.com\r\n\r\n"]
+append raw [binary format H* 00ff800d0a]
+foreach api {object namespace} {
+    test ses-$api-send {text and HTML with full envelope} -body {
+        invoke $api send_email $message
+    } -result message-123
+    foreach body {text html} {
+        test ses-$api-send-$body {minimal message with either body format and no To addresses required} -body {
+            invoke $api send_email [dict create from minimal@example.com cc first@example.com subject Hello $body body]
+        } -result minimal-123
+    }
+    test ses-$api-templated {templated email with JSON data} -body {
+        invoke $api send_templated_email [dict merge $envelope [dict create template welcome template_data $json]]
+    } -result message-123
+    test ses-$api-raw {binary MIME data and envelope options} -body {
+        invoke $api send_raw_email $raw {from sender@example.com destinations first@example.com source_arn source-arn from_arn from-arn return_path_arn return-arn configuration_set events tags {purpose raw}}
+    } -result raw-123
+    test ses-$api-raw-minimal {MIME headers supply the envelope} -body {
+        invoke $api send_raw_email $raw
+    } -result raw-123
+    foreach method {create_template update_template} {
+        test ses-$api-$method {template write} -body {invoke $api $method $template} -result {}
+    }
+    test ses-$api-get_template {UTF-8 responses and template fields} -body {
+        invoke $api get_template welcome
+    } -result [dict create name welcome subject "Hello café $face" text plain html <b>html</b>]
+    test ses-$api-delete_template {delete template} -body {invoke $api delete_template welcome} -result {}
+    test ses-$api-render {rendered template} -body {
+        invoke $api test_render_template welcome $json
+    } -result "Hello café $face"
+    test ses-$api-templates {template metadata and pagination} -body {
+        set page [invoke $api list_templates]
+        set next [invoke $api list_templates [dict create max_items 2 next_token [dict get $page next_token]]]
+        list [dict get [lindex [dict get $page templates] 0] name] \
+            [string match 2026-11-10T12:00:00* [dict get [lindex [dict get $page templates] 0] created_timestamp]] $next
+    } -result {welcome 1 {templates {} next_token {}}}
+    test ses-$api-email-identity {request verification email} -body {
+        invoke $api verify_email_identity sender@example.com
+    } -result {}
+    test ses-$api-domain-identity {domain TXT token} -body {
+        invoke $api verify_domain_identity example.com
+    } -result verify-token
+    test ses-$api-domain-dkim {DKIM CNAME tokens} -body {
+        invoke $api verify_domain_dkim example.com
+    } -result {one two three}
+    test ses-$api-identities {identity pagination and filtering} -body {
+        set page [invoke $api list_identities]
+        set next [invoke $api list_identities [dict create identity_type Domain max_items 2 next_token [dict get $page next_token]]]
+        list [dict get $page identities] $next
+    } -result {{example.com sender@example.com} {identities {} next_token {}}}
+    test ses-$api-verification {verification status map} -body {
+        invoke $api get_identity_verification_attributes {example.com sender@example.com}
+    } -result {example.com {verification_status Success verification_token verify-token}}
+    test ses-$api-dkim {DKIM status map} -body {
+        invoke $api get_identity_dkim_attributes {example.com sender@example.com}
+    } -result {example.com {dkim_enabled 1 dkim_verification_status Success dkim_tokens one}}
+    test ses-$api-delete_identity {delete identity} -body {invoke $api delete_identity example.com} -result {}
+    test ses-$api-quota {fractional quotas} -body {invoke $api get_send_quota} \
+        -result {max_24_hour_send 200.5 max_send_rate 1.5 sent_last_24_hours 3.0}
+    test ses-$api-stats {64-bit statistics} -body {
+        set point [lindex [invoke $api get_send_statistics] 0]
+        list [string match 2026-11-10T12:00:00* [dict get $point timestamp]] \
+            [dict get $point delivery_attempts] [dict get $point bounces] [dict get $point complaints] [dict get $point rejects]
+    } -result {1 4294967296 2 1 4}
+    test ses-$api-enabled {sending enabled boolean} -body {invoke $api get_account_sending_enabled} -result 1
+    test ses-$api-error {AWS exception code and message} -body {
+        catch {invoke $api send_email [dict replace $message from rejected@example.com]} error options
+        list $error [dict get $options -errorcode]
+    } -result {{injected rejection} {AWS SES MessageRejected}}
+    set invalid_messages [list \
+        [dict remove $message from] [dict remove $message subject] [dict remove $message text html] \
+        [dict replace $message to {} cc {} bcc {}] [dict replace $message to [lrepeat 51 a@example.com]] \
+        [dict replace $message to "\{"] [dict replace $message to [list {}]] \
+        [dict replace $message reply_to "\{"] [dict replace $message tags "\{"] \
+        [dict merge $message {typo unexpected}] "\{"]
+    set n 0
+    foreach bad $invalid_messages {
+        test ses-$api-invalid-email-[incr n] {malformed message rejected locally} -body {
+            invoke $api send_email $bad
+        } -returnCodes error -match glob -result *
+    }
+    foreach {method args} {
+        send_raw_email {{}}
+        send_raw_email {data {destinations {}}}
+        send_raw_email {data {destinations \{}}
+        send_raw_email {data {unknown true}}
+        send_templated_email {{from a to b template name}}
+        create_template {{name welcome subject hi}}
+        update_template {{name welcome text hi}}
+        list_identities {{identity_type invalid}}
+        list_identities {{max_items 1001}}
+        list_templates {{max_items 101}}
+        list_templates {{max_items 0}}
+        list_templates {{max_items invalid}}
+        list_templates {{unknown value}}
+        get_identity_verification_attributes {{}}
+        get_identity_dkim_attributes {{}}
+    } {
+        test ses-$api-invalid-[incr n] {invalid options rejected before HTTP} -body {
+            invoke $api $method {*}$args
+        } -returnCodes error -match glob -result *
+    }
+    foreach method {send_email send_raw_email send_templated_email create_template update_template get_template delete_template list_templates test_render_template verify_email_identity verify_domain_identity verify_domain_dkim list_identities get_identity_verification_attributes get_identity_dkim_attributes delete_identity get_send_quota get_send_statistics get_account_sending_enabled destroy} {
+        test ses-$api-arity-$method {extra arguments rejected} -body {
+            invoke $api $method a b c
+        } -returnCodes error -match glob -result {wrong # args:*}
+    }
+    foreach method {send_email send_raw_email send_templated_email create_template update_template get_template delete_template test_render_template verify_email_identity verify_domain_identity verify_domain_dkim get_identity_verification_attributes get_identity_dkim_attributes delete_identity} {
+        test ses-$api-missing-$method {required arguments rejected} -body {
+            invoke $api $method
+        } -returnCodes error -match glob -result {wrong # args:*}
+    }
+    test ses-$api-raw-many {raw recipient count is bounded} -body {
+        invoke $api send_raw_email $raw [dict create destinations [lrepeat 51 first@example.com]]
+    } -returnCodes error -match glob -result {destinations must contain*}
+    foreach method {get_identity_verification_attributes get_identity_dkim_attributes} {
+        test ses-$api-many-$method {attribute request count is bounded} -body {
+            invoke $api $method [lrepeat 101 example.com]
+        } -returnCodes error -match glob -result {identities must contain*}
+    }
+}
+test ses-bad-config {config must be a dictionary} -body {::aws::ses::create "\{"} -returnCodes error -match glob -result *
+test ses-partial-credentials {credentials supplied together} -body {
+    ::aws::ses::create {aws_access_key_id test}
+} -returnCodes error -result {aws_access_key_id and aws_secret_access_key must be supplied together}
+test ses-renamed {namespace dispatch uses command tokens} -body {
+    rename $client ::renamedSes
+    ::aws::ses::destroy ::renamedSes
+    info commands ::renamedSes
+} -result {}
+test ses-foreign {non-SES command is not a handle} -body {
+    ::aws::ses::get_send_quota puts
+} -returnCodes error -result {SES client handle not found in this interpreter}
+test ses-destroyed {stale handles rejected} -body {
+    ::aws::ses::destroy $client
+} -returnCodes error -result {SES client handle not found in this interpreter}
+test ses-delete-command {command deletion releases client} -body {
+    set c [::aws::ses::create $config]
+    rename $c {}
+    info commands $c
+} -result {}
+test ses-interpreters {clients are isolated and interpreter cleanup releases them} -body {
+    for {set i 0} {$i < 4} {incr i} {
+        interp create child
+        child eval [list load $library Aws_sdk_tcl_ses]
+        set c [::aws::ses::create $config]
+        set code [catch {child eval [list ::aws::ses::get_send_quota $c]}]
+        if {!$code} {error "client leaked into another interpreter"}
+        child eval [list ::aws::ses::create $config]
+        interp delete child
+        $c destroy
+    }
+} -result {}
+test ses-default-credentials {default provider supports constructing a client} -body {
+    set c [::aws::ses::create [dict create region us-east-1 endpoint $endpoint]]
+    $c destroy
+} -result {}
+# Deliberately leave one live client for interpreter shutdown.
+::aws::ses::create $config
+set failed $::tcltest::numTests(Failed)
+::tcltest::cleanupTests
+exit [expr {$failed > 0}]
