@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl VERSION 1.0.17 LANGUAGES CXX C)
+project(aws-sdk-tcl VERSION 1.0.18 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(CMAKE_C_STANDARD   11)
@@ -63,6 +63,13 @@ if(BUILD_TESTING)
         "${TCL_ABI_VERSION}" ${AWS_SDK_TCL_SERVICES})
     set_tests_properties(load_selected PROPERTIES
         ENVIRONMENT "AWS_EC2_METADATA_DISABLED=true" TIMEOUT 30)
+    if("dynamodb" IN_LIST AWS_SDK_TCL_SERVICES)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME dynamodb_requests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/aws-sdk-tcl-dynamodb/tests/requests_server.py"
+            --library "$<TARGET_FILE:aws-sdk-tcl-dynamodb>" --tclsh "${TCL_TCLSH}")
+        set_tests_properties(dynamodb_requests PROPERTIES TIMEOUT 90)
+    endif()
     if("ses" IN_LIST AWS_SDK_TCL_SERVICES)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
         add_test(NAME ses_requests COMMAND "${Python3_EXECUTABLE}"
