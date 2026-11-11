@@ -1,6 +1,6 @@
 {
   "name": "aws-sdk-tcl",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "scripts": {
 
   },
@@ -15,7 +15,7 @@
     "default": [
       {
         "cmd": "download",
-        "url": "https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.16.tar.gz"
+        "url": "https://github.com/jerily/aws-sdk-tcl/archive/refs/tags/v1.0.17.tar.gz"
       },
       {
         "cmd": "unpack"
