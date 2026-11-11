@@ -43,9 +43,18 @@ close $channel
 
 test version-1.0 {extension version was bumped} -body {
     package present awss3
-} -result 1.0.13
+} -result 1.0.17
 
 foreach api {object namespace} {
+    test put-$api-image {file upload accepts a MIME type and preserves bytes} -body {
+        invoke $api put test-bucket $api-put-image $filename image/svg+xml
+        expr {[download $api-put-image] eq $data}
+    } -result 1
+    test put-$api-compatible {file upload without MIME type remains supported} -body {
+        invoke $api put test-bucket $api-put-default $filename
+        expr {[download $api-put-default] eq $data}
+    } -result 1
+
     test multipart-$api-1 {manual upload preserves binary bytes and sorts ETags} -body {
         set key $api-manual
         set id [invoke $api create_multipart_upload test-bucket $key application/octet-stream]

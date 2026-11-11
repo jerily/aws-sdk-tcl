@@ -15,8 +15,8 @@ See the [examples](examples) directory for examples of using the AWS S3 service 
     - returns a list of objects in a bucket
 * **::aws::s3::put_text** *handle bucket key text*
     - puts a string into an object
-* **::aws::s3::put** *handle bucket key filename*
-    - puts a file into an object
+* **::aws::s3::put** *handle bucket key filename ?content_type?*
+    - puts a file into an object; optional *content_type* sets its MIME type (for example `image/svg+xml`)
 * **::aws::s3::put_multipart** *handle bucket key filename ?part_size?*
     - uploads a file sequentially in parts and returns the completed object's ETag
     - *part_size* is in bytes, defaults to 8 MiB (8388608), and must be between 5 MiB and 5 GiB

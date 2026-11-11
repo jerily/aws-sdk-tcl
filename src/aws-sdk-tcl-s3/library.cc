@@ -74,7 +74,7 @@ static char s3_client_usage[] =
     "Usage s3Client <method> <args>, where method can be:\n"
     "   ls bucket ?key?                 \n"
     "   put_text bucket key text        \n"
-    "   put bucket key input_file       \n"
+    "   put bucket key input_file ?content_type?\n"
     "   put_multipart bucket key input_file ?part_size?\n"
     "   create_multipart_upload bucket key ?content_type?\n"
     "   upload_part bucket key upload_id part_number data\n"
@@ -275,7 +275,7 @@ int aws_sdk_tcl_s3_PutText(Tcl_Interp *interp, const char *handle, const char *b
     }
 }
 
-int aws_sdk_tcl_s3_PutChannel(Tcl_Interp *interp, const char *handle, const char *bucket_name, const char *key_name, const char *filename) {
+int aws_sdk_tcl_s3_PutChannel(Tcl_Interp *interp, const char *handle, const char *bucket_name, const char *key_name, const char *filename, const char *content_type) {
 
     Aws::S3::S3Client *client = aws_sdk_tcl_s3_GetInternalFromName(handle);
     if (!client) {
@@ -319,6 +319,9 @@ int aws_sdk_tcl_s3_PutChannel(Tcl_Interp *interp, const char *handle, const char
     request.SetBucket(bucket);
     request.SetKey(key);
     request.SetBody(inputData);
+    if (content_type) {
+        request.SetContentType(content_type);
+    }
     Aws::S3::Model::PutObjectOutcome outcome = client->PutObject(request);
     if (!outcome.IsSuccess()) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj(outcome.GetError().GetMessage().c_str(), -1));
@@ -912,13 +915,14 @@ int aws_sdk_tcl_s3_ClientObjCmd(ClientData  clientData, Tcl_Interp *interp, int 
                 );
             case m_put:
                 DBG(fprintf(stderr, "PutMethod\n"));
-                CheckArgs(5,5,1,"put bucket prefix filename");
+                CheckArgs(5,6,1,"put bucket prefix filename ?content_type?");
                 return aws_sdk_tcl_s3_PutChannel(
                         interp,
                         handle,
                         Tcl_GetString(objv[2]),
                         Tcl_GetString(objv[3]),
-                        Tcl_GetString(objv[4])
+                        Tcl_GetString(objv[4]),
+                        objc == 6 ? Tcl_GetString(objv[5]) : nullptr
                 );
             case m_putMultipart:
                 CheckArgs(5,6,2,"bucket key filename ?part_size?");
@@ -1102,8 +1106,8 @@ static int aws_sdk_tcl_s3_PutTextCmd(ClientData  clientData, Tcl_Interp *interp,
 
 static int aws_sdk_tcl_s3_PutChannelCmd(ClientData  clientData, Tcl_Interp *interp, int objc, Tcl_Obj * const objv[] ) {
     DBG(fprintf(stderr, "PutChannelCmd\n"));
-    CheckArgs(5,5,1,"handle_name bucket key filename");
-    return aws_sdk_tcl_s3_PutChannel(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]));
+    CheckArgs(5,6,1,"handle_name bucket key filename ?content_type?");
+    return aws_sdk_tcl_s3_PutChannel(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]), Tcl_GetString(objv[3]), Tcl_GetString(objv[4]), objc == 6 ? Tcl_GetString(objv[5]) : nullptr);
 }
 
 static int aws_sdk_tcl_s3_PutMultipartCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {

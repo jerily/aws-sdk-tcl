@@ -96,6 +96,11 @@ class S3Handler(BaseHTTPRequestHandler):
 
     def do_PUT(self):
         key, query, body = self.request_data()
+        if "uploadId" not in query:
+            self.server.objects[key] = body
+            self.server.content_types[key] = self.headers.get("Content-Type")
+            self.reply(200, ETag='"put-etag"')
+            return
         upload = self.upload(key, query)
         if upload is None:
             return
@@ -137,6 +142,7 @@ def main():
                AWS_REQUEST_CHECKSUM_CALCULATION="when_required")
     with ThreadingHTTPServer(("127.0.0.1", 0), S3Handler) as server:
         server.requests, server.uploads, server.objects = [], {}, {}
+        server.content_types = {}
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         try:
@@ -149,6 +155,7 @@ def main():
             if result.returncode:
                 return result.returncode
             for api in ("object", "namespace"):
+                assert server.content_types[f"{api}-put-image"] == "image/svg+xml"
                 for suffix in ("part-error", "complete-error", "manual-abort", "read-error"):
                     upload = next(u for u in server.uploads.values() if u["key"] == f"{api}-{suffix}")
                     assert upload["aborted"], f"upload was not aborted: {api}-{suffix}"
