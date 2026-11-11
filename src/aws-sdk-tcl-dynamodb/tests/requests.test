@@ -1,0 +1,61 @@
+package require tcltest 2
+namespace import ::tcltest::test
+lassign $argv library endpoint
+set argv {}
+load $library Aws_sdk_tcl_dynamodb
+set client [::aws::dynamodb::create [dict create region us-east-1 endpoint $endpoint aws_access_key_id test aws_secret_access_key test]]
+proc invoke {api method args} {
+    if {$api eq "object"} {return [::$::client $method {*}$args]}
+    return [::aws::dynamodb::$method ::$::client {*}$args]
+}
+foreach api {object namespace} {
+    test ddb-$api-put-legacy {old put signature remains supported} -body {
+        invoke $api put_item Sessions {id {S legacy}}
+    } -result 1
+    test ddb-$api-put-condition {conditional put reports structured errors} -body {
+        catch {invoke $api put_item Sessions {id {S duplicate}} \
+            {condition_expression {attribute_not_exists(#id)} expression_attribute_names {#id id}}} msg opts
+        dict get $opts -errorcode
+    } -result {AWS DynamoDB ConditionalCheckFailedException}
+    test ddb-$api-put-values {condition names and scalar values are serialized} -body {
+        invoke $api put_item Sessions {id {S cas}} {condition_expression {#r = :r AND #e > :now AND #s = :s AND #b = :b} \
+            expression_attribute_names {#r revision #e expires #s subject #b enabled} \
+            expression_attribute_values {:r {N 2} :now {N 10} :s {S alice} :b {BOOL false}}}
+    } -result 1
+    test ddb-$api-get-legacy {get remains eventually consistent by default} -body {
+        invoke $api get_item Sessions {id {S legacy}}
+    } -result {}
+    test ddb-$api-get-consistent {strongly consistent read} -body {
+        invoke $api get_item Sessions {id {S consistent}} true
+    } -result {id {S consistent}}
+    test ddb-$api-delete-legacy {old delete signature remains supported} -body {
+        invoke $api delete_item Sessions {id {S legacy}}
+    } -result 1
+    test ddb-$api-delete-condition {conditional delete reports structured errors} -body {
+        catch {invoke $api delete_item Sessions {id {S missing}} \
+            {condition_expression {attribute_exists(#id)} expression_attribute_names {#id id}}} msg opts
+        dict get $opts -errorcode
+    } -result {AWS DynamoDB ConditionalCheckFailedException}
+    test ddb-$api-query {consistent queries follow pages and cap the total item count} -body {
+        llength [invoke $api query_items Sessions {tenant {S tenant}} {} {} 3 {} true]
+    } -result 3
+    test ddb-$api-query-default {empty optional arguments omit limit and index} -body {
+        invoke $api query_items Sessions {tenant {S empty}} {} {} {} {} true
+    } -result {}
+    test ddb-$api-validation {bad options are rejected before a request} -body {
+        set failed {}
+        foreach opts [list {bogus 1} {expression_attribute_names broken} \
+            {expression_attribute_values {:v broken}} {expression_attribute_values {:v {M {x {S y}}}}} \
+            {expression_attribute_values {:v {BOOL maybe}}}] {
+            lappend failed [catch {invoke $api put_item Sessions {id {S test}} $opts}]
+        }
+        lappend failed [catch {invoke $api get_item Sessions {id {S test}} maybe}] \
+            [catch {invoke $api query_items Sessions {tenant {S test}} {} maybe}] \
+            [catch {invoke $api query_items Sessions {tenant {S test}} {} {} 0}]
+        set failed
+    } -result {1 1 1 1 1 1 1 1}
+}
+::$client destroy
+set failed $::tcltest::numTests(Failed)
+::tcltest::cleanupTests
+exit [expr {$failed > 0}]
