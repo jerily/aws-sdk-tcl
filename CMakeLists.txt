@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22.1)
-project(aws-sdk-tcl VERSION 1.0.18 LANGUAGES CXX C)
+project(aws-sdk-tcl VERSION 1.0.19 LANGUAGES CXX C)
 message(project: ${PROJECT_NAME})
 
 set(CMAKE_C_STANDARD   11)
@@ -76,6 +76,13 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_SOURCE_DIR}/src/aws-sdk-tcl-ses/tests/ses_server.py"
             --library "$<TARGET_FILE:aws-sdk-tcl-ses>" --tclsh "${TCL_TCLSH}")
         set_tests_properties(ses_requests PROPERTIES TIMEOUT 120)
+    endif()
+    if("sqs" IN_LIST AWS_SDK_TCL_SERVICES)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME sqs_requests COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/aws-sdk-tcl-sqs/tests/requests_server.py"
+            --library "$<TARGET_FILE:aws-sdk-tcl-sqs>" --tclsh "${TCL_TCLSH}")
+        set_tests_properties(sqs_requests PROPERTIES TIMEOUT 90)
     endif()
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_READELF AND CMAKE_NM)
         set(module_libraries)

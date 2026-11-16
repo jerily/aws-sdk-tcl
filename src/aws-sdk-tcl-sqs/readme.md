@@ -11,6 +11,8 @@
   - destroys an SQS client
 * **::aws::sqs::create_queue** *handle* *queue_name*
   - creates an SQS queue
+* **::aws::sqs::get_queue_url** *handle* *queue_name*
+  - resolves an existing queue name to its URL without creating it
 * **::aws::sqs::delete_queue** *handle* *queue_url*
   - deletes an SQS queue
 * **::aws::sqs::list_queues** *handle*
@@ -18,7 +20,8 @@
 * **::aws::sqs::send_message** *handle* *queue_url* *message*
   - sends a message to an SQS queue
 * **::aws::sqs::receive_messages** *handle* *queue_url* *?max_number_of_messages?*
-  - receives messages from an SQS queue
+  - receives messages from an SQS queue (maximum 1..10, default 1)
+  - returns a list of dictionaries with `MessageId`, `ReceiptHandle`, and `Body`; delete only after successful processing
 * **::aws::sqs::delete_message** *handle* *queue_url* *message_receipt_handle*
   - deletes a message from an SQS queue
 * **::aws::sqs::delete_message_batch** *handle* *queue_url* *message_receipt_handles*
@@ -30,6 +33,7 @@
 * **::aws::sqs::get_queue_attributes** *handle* *queue_url*
   - gets all attributes of an SQS queue
 
-
-
-
+Load with `package require awssqs`. Every operation is also available as a
+client method, for example `$client get_queue_url user-emails`. Client config
+supports `endpoint` for local fixtures and the default AWS credential provider
+chain when explicit credentials are omitted. Message bodies are UTF-8 strings.
