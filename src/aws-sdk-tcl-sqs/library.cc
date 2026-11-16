@@ -9,6 +9,7 @@
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/sqs/SQSClient.h>
 #include <aws/sqs/model/CreateQueueRequest.h>
+#include <aws/sqs/model/GetQueueUrlRequest.h>
 #include <aws/sqs/model/DeleteQueueRequest.h>
 #include <aws/sqs/model/ListQueuesRequest.h>
 #include <aws/sqs/model/SendMessageRequest.h>
@@ -46,7 +47,30 @@ typedef int Tcl_Size;
                      return TCL_ERROR; \
                  }
 
-#define CMD_NAME(s, internal) std::sprintf((s), "_AWS_S3_%p", (internal))
+#define CMD_NAME(s, internal) std::sprintf((s), "_AWS_SQS_%p", (internal))
+
+// AWS expects standard UTF-8; Tcl 8.6's internal encoding uses surrogate pairs.
+static Aws::String String(Tcl_Obj *obj) {
+    Tcl_Size length;
+    const char *value = Tcl_GetStringFromObj(obj, &length);
+    Tcl_DString buffer;
+    Tcl_Encoding encoding = Tcl_GetEncoding(nullptr, "utf-8");
+    Tcl_UtfToExternalDString(encoding, value, length, &buffer);
+    Aws::String result(Tcl_DStringValue(&buffer), Tcl_DStringLength(&buffer));
+    Tcl_DStringFree(&buffer);
+    Tcl_FreeEncoding(encoding);
+    return result;
+}
+
+static Tcl_Obj *StringObj(const Aws::String &value) {
+    Tcl_DString buffer;
+    Tcl_Encoding encoding = Tcl_GetEncoding(nullptr, "utf-8");
+    Tcl_ExternalToUtfDString(encoding, value.data(), value.size(), &buffer);
+    Tcl_Obj *result = Tcl_NewStringObj(Tcl_DStringValue(&buffer), Tcl_DStringLength(&buffer));
+    Tcl_DStringFree(&buffer);
+    Tcl_FreeEncoding(encoding);
+    return result;
+}
 
 static char VAR_READ_ONLY_MSG[] = "var is read-only";
 
@@ -65,6 +89,7 @@ static char client_usage[] =
         "Usage sqsClient <method> <args>, where method can be:\n"
         "  destroy\n"
         "  create_queue queue_name\n"
+        "  get_queue_url queue_name\n"
         "  delete_queue queue_url\n"
         "  list_queues\n"
         "  send_message queue_url message\n"
@@ -158,6 +183,23 @@ int aws_sdk_tcl_sqs_CreateQueue(Tcl_Interp *interp, const char *handle, const ch
     }
 }
 
+int aws_sdk_tcl_sqs_GetQueueUrl(Tcl_Interp *interp, const char *handle, const char *queue_name) {
+    auto *client = aws_sdk_tcl_sqs_GetInternalFromName(handle);
+    if (!client) {
+        Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
+        return TCL_ERROR;
+    }
+    Aws::SQS::Model::GetQueueUrlRequest request;
+    request.SetQueueName(queue_name);
+    auto outcome = client->GetQueueUrl(request);
+    if (!outcome.IsSuccess()) {
+        Tcl_SetObjResult(interp, StringObj(outcome.GetError().GetMessage()));
+        return TCL_ERROR;
+    }
+    Tcl_SetObjResult(interp, StringObj(outcome.GetResult().GetQueueUrl()));
+    return TCL_OK;
+}
+
 int aws_sdk_tcl_sqs_DeleteQueue(Tcl_Interp *interp, const char *handle, const char *queue_url) {
     Aws::SQS::SQSClient *client = aws_sdk_tcl_sqs_GetInternalFromName(handle);
     if (!client) {
@@ -199,7 +241,7 @@ int aws_sdk_tcl_sqs_ListQueues(Tcl_Interp *interp, const char *handle) {
     }
 }
 
-int aws_sdk_tcl_sqs_SendMessage(Tcl_Interp *interp, const char *handle, const char *queue_url, const char *message) {
+int aws_sdk_tcl_sqs_SendMessage(Tcl_Interp *interp, const char *handle, const char *queue_url, Tcl_Obj *message) {
     Aws::SQS::SQSClient *client = aws_sdk_tcl_sqs_GetInternalFromName(handle);
     if (!client) {
         Tcl_SetObjResult(interp, Tcl_NewStringObj("handle not found", -1));
@@ -207,7 +249,7 @@ int aws_sdk_tcl_sqs_SendMessage(Tcl_Interp *interp, const char *handle, const ch
     }
     Aws::SQS::Model::SendMessageRequest request;
     request.SetQueueUrl(queue_url);
-    request.SetMessageBody(message);
+    request.SetMessageBody(String(message));
     auto outcome = client->SendMessage(request);
     if (outcome.IsSuccess()) {
         Tcl_SetObjResult(interp, Tcl_NewBooleanObj(1));
@@ -233,6 +275,10 @@ int aws_sdk_tcl_sqs_ReceiveMessages(Tcl_Interp *interp, const char *handle, cons
             Tcl_SetObjResult(interp, Tcl_NewStringObj("maxNumberOfMessages must be an integer", -1));
             return TCL_ERROR;
         }
+        if (maxNumberOfMessages < 1 || maxNumberOfMessages > 10) {
+            Tcl_SetObjResult(interp, Tcl_NewStringObj("maxNumberOfMessages must be 1..10", -1));
+            return TCL_ERROR;
+        }
         request.SetMaxNumberOfMessages(maxNumberOfMessages);
     } else {
         request.SetMaxNumberOfMessages(1);
@@ -248,7 +294,7 @@ int aws_sdk_tcl_sqs_ReceiveMessages(Tcl_Interp *interp, const char *handle, cons
             Tcl_DictObjPut(interp, messagePtr, Tcl_NewStringObj("ReceiptHandle", -1),
                            Tcl_NewStringObj(iter.GetReceiptHandle().c_str(), -1));
             Tcl_DictObjPut(interp, messagePtr, Tcl_NewStringObj("Body", -1),
-                           Tcl_NewStringObj(iter.GetBody().c_str(), -1));
+                           StringObj(iter.GetBody()));
             Tcl_ListObjAppendElement(interp, listPtr, messagePtr);
         }
         Tcl_SetObjResult(interp, listPtr);
@@ -520,6 +566,7 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
     static const char *clientMethods[] = {
             "destroy",
             "create_queue",
+            "get_queue_url",
             "delete_queue",
             "list_queues",
             "send_message",
@@ -535,6 +582,7 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
     enum clientMethod {
         m_destroy,
         m_createQueue,
+        m_getQueueUrl,
         m_deleteQueue,
         m_listQueues,
         m_sendMessage,
@@ -570,6 +618,9 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
                         handle,
                         Tcl_GetString(objv[2])
                 );
+            case m_getQueueUrl:
+                CheckArgs(3, 3, 1, "get_queue_url queue_name");
+                return aws_sdk_tcl_sqs_GetQueueUrl(interp, handle, Tcl_GetString(objv[2]));
             case m_deleteQueue:
                 DBG(fprintf(stderr, "DeleteQueueMethod\n"));
                 CheckArgs(3, 3, 1, "delete_queue queue_url");
@@ -589,7 +640,7 @@ int aws_sdk_tcl_sqs_ClientObjCmd(ClientData clientData, Tcl_Interp *interp, int 
                         interp,
                         handle,
                         Tcl_GetString(objv[2]),
-                        Tcl_GetString(objv[3])
+                        objv[3]
                 );
             case m_receiveMessages:
                 DBG(fprintf(stderr, "ReceiveMessagesMethod\n"));
@@ -741,6 +792,11 @@ static int aws_sdk_tcl_sqs_CreateQueueCmd(ClientData clientData, Tcl_Interp *int
     );
 }
 
+static int aws_sdk_tcl_sqs_GetQueueUrlCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
+    CheckArgs(3, 3, 1, "handle queue_name");
+    return aws_sdk_tcl_sqs_GetQueueUrl(interp, Tcl_GetString(objv[1]), Tcl_GetString(objv[2]));
+}
+
 static int aws_sdk_tcl_sqs_DeleteQueueCmd(ClientData clientData, Tcl_Interp *interp, int objc, Tcl_Obj *const objv[]) {
     DBG(fprintf(stderr, "DeleteQueueCmd\n"));
     CheckArgs(3, 3, 1, "handle queue_url");
@@ -764,7 +820,7 @@ static int aws_sdk_tcl_sqs_SendMessageCmd(ClientData clientData, Tcl_Interp *int
             interp,
             Tcl_GetString(objv[1]),
             Tcl_GetString(objv[2]),
-            Tcl_GetString(objv[3])
+            objv[3]
     );
 }
 
@@ -881,6 +937,7 @@ int Aws_sdk_tcl_sqs_Init(Tcl_Interp *interp) {
     Tcl_CreateObjCommand(interp, "::aws::sqs::create", aws_sdk_tcl_sqs_CreateCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::destroy", aws_sdk_tcl_sqs_DestroyCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::create_queue", aws_sdk_tcl_sqs_CreateQueueCmd, nullptr, nullptr);
+    Tcl_CreateObjCommand(interp, "::aws::sqs::get_queue_url", aws_sdk_tcl_sqs_GetQueueUrlCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::delete_queue", aws_sdk_tcl_sqs_DeleteQueueCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::list_queues", aws_sdk_tcl_sqs_ListQueuesCmd, nullptr, nullptr);
     Tcl_CreateObjCommand(interp, "::aws::sqs::send_message", aws_sdk_tcl_sqs_SendMessageCmd, nullptr, nullptr);

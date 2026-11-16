@@ -1,0 +1,39 @@
+package require tcltest 2
+namespace import ::tcltest::*
+lassign $argv library endpoint
+set argv {}
+load $library Aws_sdk_tcl_sqs
+set client [::aws::sqs::create [dict create region us-east-1 endpoint $endpoint \
+    aws_access_key_id test aws_secret_access_key test]]
+set face [encoding convertfrom utf-8 [binary format H* f09f9880]]
+
+foreach style {client namespace} {
+    proc call {method args} [expr {$style eq "client" ?
+        {return [$::client $method {*}$args]} :
+        {return [::aws::sqs::$method $::client {*}$args]}}]
+    test sqs-$style-roundtrip {resolve, send, receive, acknowledge UTF-8 email} -body {
+        set queue [call get_queue_url user-emails]
+        set body "Hello café $face\nline two"
+        set sent [call send_message $queue $body]
+        set message [lindex [call receive_messages $queue 10] 0]
+        list [string match */user-emails $queue] $sent \
+            [expr {[dict get $message Body] eq $body}] [dict get $message MessageId] \
+            [call delete_message $queue [dict get $message ReceiptHandle]]
+    } -result {1 1 1 message-id {}}
+    test sqs-$style-errors {missing queues and service failures reach Tcl} -body {
+        list [catch {call get_queue_url missing} error] [string match {*missing queue*} $error] \
+            [catch {call send_message $queue reject}] \
+            [catch {call receive_messages $queue 0}] \
+            [catch {call receive_messages $queue 11}] \
+            [catch {call receive_messages $queue invalid}] \
+            [catch {call delete_message $queue invalid}]
+    } -result {1 1 1 1 1 1 1}
+}
+test sqs-handle {new API rejects unknown handles and wrong argument counts} -body {
+    list [catch {::aws::sqs::get_queue_url missing user-emails}] \
+        [catch {$client get_queue_url}] [catch {::aws::sqs::get_queue_url $client}]
+} -result {1 1 1}
+$client destroy
+set failed $::tcltest::numTests(Failed)
+cleanupTests
+exit [expr {$failed > 0}]
